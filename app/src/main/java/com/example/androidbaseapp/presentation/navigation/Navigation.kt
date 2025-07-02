@@ -1,5 +1,8 @@
 package com.example.androidbaseapp.presentation.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -28,7 +31,21 @@ fun AndroidBaseNavigation(
         startDestination = Routes.USER_LIST,
         modifier = modifier
     ) {
-        composable(Routes.USER_LIST) {
+        composable(
+            route = Routes.USER_LIST,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300)
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300)
+                )
+            }
+        ) {
             UserListScreen(
                 onNavigateToDetail = { userId ->
                     navController.navigate(Routes.userDetail(userId))
@@ -40,7 +57,19 @@ fun AndroidBaseNavigation(
             route = Routes.USER_DETAIL,
             arguments = listOf(
                 navArgument("userId") { type = NavType.IntType }
-            )
+            ),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300)
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300)
+                )
+            }
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getInt("userId") ?: 0
             UserDetailScreen(
