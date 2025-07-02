@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#3DDC84</color>
+    <string name="app_name">User Directory</string>
+    <style name="Theme.UserDirectory" parent="android:Theme.Material.Light.NoActionBar"/>
+</resources>

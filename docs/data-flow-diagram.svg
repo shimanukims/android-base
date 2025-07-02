@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1400" height="1600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- グラデーション定義 -->
+    <linearGradient id="flowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#E3F2FD;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#BBDEFB;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 影効果 -->
+    <filter id="dropShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="2" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- 矢印マーカー -->
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1400" height="1600" fill="#FAFAFA"/>
+  
+  <!-- タイトル -->
+  <text x="700" y="40" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="#1A237E">
+    Android App データフロー &amp; 処理シーケンス
+  </text>
+
+  <!-- ユーザー -->
+  <g id="user">
+    <circle cx="100" cy="150" r="30" fill="#FFC107" stroke="#F57C00" stroke-width="2"/>
+    <text x="100" y="200" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#333">ユーザー</text>
+  </g>
+
+  <!-- UI Layer -->
+  <g id="ui-layer">
+    <rect x="200" y="100" width="1150" height="200" rx="10" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="775" y="130" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#2E7D32">
+      UI Layer (Presentation)
+    </text>
+    
+    <!-- Compose UI -->
+    <rect x="250" y="150" width="180" height="100" rx="5" fill="white" stroke="#4CAF50" stroke-width="2"/>
+    <text x="340" y="180" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Compose UI</text>
+    <text x="340" y="200" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">@Composable</text>
+    <text x="340" y="220" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">画面描画</text>
+    
+    <!-- ViewModel -->
+    <rect x="500" y="150" width="200" height="100" rx="5" fill="white" stroke="#4CAF50" stroke-width="2"/>
+    <text x="600" y="180" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">ViewModel</text>
+    <text x="600" y="200" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">@HiltViewModel</text>
+    <text x="600" y="220" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">UI状態管理</text>
+    
+    <!-- UI State -->
+    <rect x="780" y="150" width="180" height="100" rx="5" fill="#FFF9C4" stroke="#F9A825" stroke-width="2"/>
+    <text x="870" y="175" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">UI State</text>
+    <text x="870" y="195" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">StateFlow</text>
+    <text x="870" y="210" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">データ: Loading</text>
+    <text x="870" y="225" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">Success / Error</text>
+    
+    <!-- UI Event -->
+    <rect x="1040" y="150" width="180" height="100" rx="5" fill="#FFE0B2" stroke="#EF6C00" stroke-width="2"/>
+    <text x="1130" y="175" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">UI Event</text>
+    <text x="1130" y="195" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">SharedFlow</text>
+    <text x="1130" y="210" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">Navigation</text>
+    <text x="1130" y="225" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">Toast/Dialog</text>
+  </g>
+
+  <!-- Domain Layer -->
+  <g id="domain-layer">
+    <rect x="200" y="350" width="1150" height="200" rx="10" fill="#E3F2FD" stroke="#2196F3" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="775" y="380" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#1565C0">
+      Domain Layer (Business Logic)
+    </text>
+    
+    <!-- UseCase -->
+    <rect x="400" y="400" width="250" height="100" rx="5" fill="white" stroke="#2196F3" stroke-width="2"/>
+    <text x="525" y="430" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">UseCase</text>
+    <text x="525" y="450" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">ビジネスロジック実行</text>
+    <text x="525" y="470" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">データ検証・加工</text>
+    
+    <!-- Repository Interface -->
+    <rect x="750" y="400" width="250" height="100" rx="5" fill="white" stroke="#2196F3" stroke-width="2"/>
+    <text x="875" y="430" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Repository Interface</text>
+    <text x="875" y="450" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">データ取得契約</text>
+    <text x="875" y="470" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">suspend functions</text>
+  </g>
+
+  <!-- Data Layer -->
+  <g id="data-layer">
+    <rect x="200" y="600" width="1150" height="350" rx="10" fill="#FFF3E0" stroke="#FF9800" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="775" y="630" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#E65100">
+      Data Layer (Data Access)
+    </text>
+    
+    <!-- Repository Implementation -->
+    <rect x="550" y="660" width="300" height="100" rx="5" fill="white" stroke="#FF9800" stroke-width="2"/>
+    <text x="700" y="690" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Repository Implementation</text>
+    <text x="700" y="710" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">データソース調整</text>
+    <text x="700" y="730" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">キャッシュ戦略実行</text>
+    
+    <!-- Local DataSource -->
+    <rect x="300" y="820" width="200" height="80" rx="5" fill="white" stroke="#FF9800" stroke-width="2"/>
+    <text x="400" y="850" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Local DataSource</text>
+    <text x="400" y="870" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">Room Database</text>
+    
+    <!-- Remote DataSource -->
+    <rect x="600" y="820" width="200" height="80" rx="5" fill="white" stroke="#FF9800" stroke-width="2"/>
+    <text x="700" y="850" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Remote DataSource</text>
+    <text x="700" y="870" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">Retrofit + OkHttp</text>
+    
+    <!-- DataStore -->
+    <rect x="900" y="820" width="200" height="80" rx="5" fill="white" stroke="#FF9800" stroke-width="2"/>
+    <text x="1000" y="850" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">DataStore</text>
+    <text x="1000" y="870" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">設定保存</text>
+  </g>
+
+  <!-- External Systems -->
+  <g id="external">
+    <rect x="300" y="1000" width="200" height="80" rx="5" fill="#E1BEE7" stroke="#7B1FA2" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="400" y="1030" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">SQLite DB</text>
+    <text x="400" y="1050" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">ローカル永続化</text>
+    
+    <rect x="600" y="1000" width="200" height="80" rx="5" fill="#E1BEE7" stroke="#7B1FA2" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="700" y="1030" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">REST API</text>
+    <text x="700" y="1050" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">外部サーバー</text>
+    
+    <rect x="900" y="1000" width="200" height="80" rx="5" fill="#E1BEE7" stroke="#7B1FA2" stroke-width="2" filter="url(#dropShadow)"/>
+    <text x="1000" y="1030" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#333">Preferences</text>
+    <text x="1000" y="1050" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666">Key-Value保存</text>
+  </g>
+
+  <!-- データフロー矢印 -->
+  <!-- ユーザー操作 -->
+  <path d="M 130 150 L 250 180" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="180" y="140" font-family="Arial, sans-serif" font-size="11" fill="#333">①タップ</text>
+  
+  <!-- UI -> ViewModel -->
+  <path d="M 430 200 L 500 200" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="460" y="195" font-family="Arial, sans-serif" font-size="11" fill="#333">②イベント</text>
+  
+  <!-- ViewModel -> UseCase -->
+  <path d="M 600 250 L 600 400" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="610" y="330" font-family="Arial, sans-serif" font-size="11" fill="#333">③実行依頼</text>
+  
+  <!-- UseCase -> Repository -->
+  <path d="M 650 450 L 750 450" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="685" y="445" font-family="Arial, sans-serif" font-size="11" fill="#333">④データ要求</text>
+  
+  <!-- Repository Interface -> Implementation -->
+  <path d="M 875 500 L 875 590 L 700 590 L 700 660" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="790" y="580" font-family="Arial, sans-serif" font-size="11" fill="#333">⑤実装呼出</text>
+  
+  <!-- Repository -> DataSources -->
+  <path d="M 600 760 L 400 760 L 400 820" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M 700 760 L 700 820" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M 800 760 L 1000 760 L 1000 820" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="450" y="755" font-family="Arial, sans-serif" font-size="11" fill="#333">⑥-1 キャッシュ確認</text>
+  <text x="710" y="790" font-family="Arial, sans-serif" font-size="11" fill="#333">⑥-2 API呼出</text>
+  <text x="900" y="755" font-family="Arial, sans-serif" font-size="11" fill="#333">⑥-3 設定取得</text>
+  
+  <!-- DataSources -> External -->
+  <path d="M 400 900 L 400 1000" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M 700 900 L 700 1000" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <path d="M 1000 900 L 1000 1000" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  
+  <!-- Return flow -->
+  <path d="M 1000 450 L 1050 450 L 1050 350 L 475 350 L 475 400" stroke="#333" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow)" fill="none"/>
+  <text x="760" y="345" font-family="Arial, sans-serif" font-size="11" fill="#333">⑦Result&lt;T&gt;</text>
+  
+  <path d="M 475 480 L 420 480 L 420 300 L 570 300 L 570 250" stroke="#333" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow)" fill="none"/>
+  <text x="430" y="380" font-family="Arial, sans-serif" font-size="11" fill="#333">⑧結果返却</text>
+  
+  <!-- ViewModel -> UI State -->
+  <path d="M 700 200 L 780 200" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="720" y="195" font-family="Arial, sans-serif" font-size="11" fill="#333">⑨状態更新</text>
+  
+  <!-- UI State -> Compose -->
+  <path d="M 870 150 L 870 100 L 340 100 L 340 150" stroke="#333" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <text x="600" y="95" font-family="Arial, sans-serif" font-size="11" fill="#333">⑩自動再描画</text>
+  
+  <!-- ViewModel -> UI Event -->
+  <path d="M 700 220 L 1040 220" stroke="#333" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrow)" fill="none"/>
+  <text x="850" y="215" font-family="Arial, sans-serif" font-size="11" fill="#333">イベント送信</text>
+
+  <!-- 処理シーケンス説明 -->
+  <g id="sequence-description">
+    <rect x="50" y="1150" width="1300" height="400" rx="10" fill="url(#flowGradient)" stroke="#1976D2" stroke-width="2"/>
+    <text x="700" y="1180" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#1565C0">
+      処理シーケンス詳細
+    </text>
+    
+    <text x="80" y="1220" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">1. ユーザー操作:</text>
+    <text x="100" y="1240" font-family="Arial, sans-serif" font-size="12" fill="#666">ボタンタップ、スワイプなどのユーザーアクション</text>
+    
+    <text x="80" y="1270" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">2. UI イベント処理:</text>
+    <text x="100" y="1290" font-family="Arial, sans-serif" font-size="12" fill="#666">Compose UIがイベントを検知し、ViewModelのメソッドを呼び出し</text>
+    
+    <text x="80" y="1320" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">3. ビジネスロジック実行:</text>
+    <text x="100" y="1340" font-family="Arial, sans-serif" font-size="12" fill="#666">ViewModelがUseCaseを通じてビジネスロジックを実行（バリデーション、計算など）</text>
+    
+    <text x="80" y="1370" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">4. データ取得戦略:</text>
+    <text x="100" y="1390" font-family="Arial, sans-serif" font-size="12" fill="#666">Repository実装がキャッシュ確認 → 必要に応じてAPIコール → 結果をRoomに保存</text>
+    
+    <text x="80" y="1420" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">5. 状態更新と画面反映:</text>
+    <text x="100" y="1440" font-family="Arial, sans-serif" font-size="12" fill="#666">Result（Success/Error）をStateFlowで管理 → Composeが自動的に再コンポジション</text>
+    
+    <text x="700" y="1220" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">エラーハンドリング:</text>
+    <text x="720" y="1240" font-family="Arial, sans-serif" font-size="12" fill="#666">• ネットワークエラー → キャッシュデータ表示 + エラーメッセージ</text>
+    <text x="720" y="1260" font-family="Arial, sans-serif" font-size="12" fill="#666">• データ不整合 → UseCaseでバリデーション実施</text>
+    <text x="720" y="1280" font-family="Arial, sans-serif" font-size="12" fill="#666">• 予期せぬエラー → Result.Errorで安全に処理</text>
+    
+    <text x="700" y="1320" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">非同期処理:</text>
+    <text x="720" y="1340" font-family="Arial, sans-serif" font-size="12" fill="#666">• Coroutines（suspend関数）で実装</text>
+    <text x="720" y="1360" font-family="Arial, sans-serif" font-size="12" fill="#666">• viewModelScope/lifecycleScopeで生存期間管理</text>
+    <text x="720" y="1380" font-family="Arial, sans-serif" font-size="12" fill="#666">• Dispatchers.IOでI/O処理を別スレッド実行</text>
+    
+    <text x="700" y="1420" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">キャッシュ戦略（Single Source of Truth）:</text>
+    <text x="720" y="1440" font-family="Arial, sans-serif" font-size="12" fill="#666">• UIは常にRoomデータベースを監視（Flow）</text>
+    <text x="720" y="1460" font-family="Arial, sans-serif" font-size="12" fill="#666">• APIデータは一度Roomに保存してからUI反映</text>
+    <text x="720" y="1480" font-family="Arial, sans-serif" font-size="12" fill="#666">• オフライン時も最新のキャッシュデータを表示</text>
+  </g>
+</svg>
