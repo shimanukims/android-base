@@ -2,63 +2,167 @@
 
 > 新規参画者向け基本構成説明および機能拡張時の設計方針
 
-## 1. 全体アーキテクチャ（Clean Architecture + MVVM）
+## Architecture1: 全体アーキテクチャ（Clean Architecture + MVVM）
 
 ```mermaid
 graph TB
-    subgraph "📱 Presentation Layer"
+    subgraph PresentationLayer ["🖥️ Presentation Layer - UI表示とユーザー操作"]
         direction TB
-        Screen[Screen<br/>Jetpack Compose]
-        ViewModel[ViewModel<br/>StateFlow + UiState]
         
-        Screen --> ViewModel
-    end
-    
-    subgraph "🎯 Domain Layer"
-        direction TB
-        Repository[Repository Interface]
-        Models[Domain Models]
-        UseCases[Use Cases<br/>※必要に応じて追加]
-        
-        Repository --> Models
-    end
-    
-    subgraph "🔄 Data Layer"
-        direction TB
-        RepoImpl[Repository Implementation]
-        
-        subgraph "Remote"
-            API[Retrofit API]
-            DTOs[Data Transfer Objects]
+        subgraph Screens ["画面 (Composable)"]
+            UserListScreen["UserListScreen|一覧表示"]
+            UserDetailScreen["UserDetailScreen|詳細表示"]
         end
         
-        subgraph "Local"
-            DAO[Room DAO]
-            Entities[Database Entities]
+        subgraph ViewModels ["ビジネスロジック管理"]
+            UserListVM["UserListViewModel|StateFlow管理"]
+            UserDetailVM["UserDetailViewModel|画面状態制御"]
         end
         
-        RepoImpl --> API
-        RepoImpl --> DAO
-        API --> DTOs
-        DAO --> Entities
+        subgraph UIState ["UI状態定義"]
+            UiStateClasses["UiState Data Classes|Loading/Success/Error"]
+        end
+        
+        UserListScreen --> UserListVM
+        UserDetailScreen --> UserDetailVM
+        UserListVM --> UiStateClasses
+        UserDetailVM --> UiStateClasses
     end
     
-    subgraph "⚙️ DI Layer"
+    subgraph DomainLayer ["🎯 Domain Layer - ビジネスルールと抽象化"]
+        direction TB
+        
+        subgraph Interfaces ["インターフェース定義"]
+            UserRepository["UserRepository Interface|データアクセス抽象化"]
+        end
+        
+        subgraph Models ["ドメインモデル"]
+            User["User Model|ビジネスオブジェクト"]
+            Address["Address Model|値オブジェクト"]
+            AppError["AppError|エラー定義"]
+        end
+        
+        subgraph UseCases ["ユースケース (必要に応じて)"]
+            GetUsersUseCase["GetUsersUseCase|ユーザー取得ロジック"]
+            RefreshUsersUseCase["RefreshUsersUseCase|更新ロジック"]
+        end
+        
+        UserRepository --> Models
+        UseCases --> UserRepository
+        UseCases --> Models
+    end
+    
+    subgraph DataLayer ["💾 Data Layer - データ取得と永続化"]
+        direction TB
+        
+        subgraph Implementation ["Repository実装"]
+            UserRepoImpl["UserRepositoryImpl|データソース調整"]
+        end
+        
+        subgraph RemoteDataSource ["リモートデータソース"]
+            UserApi["UserApi (Retrofit)|REST API呼び出し"]
+            UserDto["UserDto|API レスポンス"]
+            ApiErrorHandler["ApiErrorHandler|エラー変換"]
+        end
+        
+        subgraph LocalDataSource ["ローカルデータソース"]
+            UserDao["UserDao (Room)|DB操作"]
+            UserEntity["UserEntity|DB テーブル"]
+            AppDatabase["AppDatabase|DB設定"]
+        end
+        
+        subgraph DataTransformation ["データ変換"]
+            DtoMapper["Dto → Domain Mapper"]
+            EntityMapper["Entity ↔ Domain Mapper"]
+        end
+        
+        UserRepoImpl --> UserApi
+        UserRepoImpl --> UserDao
+        UserApi --> UserDto
+        UserDao --> UserEntity
+        UserEntity --> AppDatabase
+        UserDto --> DtoMapper
+        UserEntity --> EntityMapper
+        DtoMapper --> Models
+        EntityMapper --> Models
+        UserApi --> ApiErrorHandler
+        ApiErrorHandler --> AppError
+    end
+    
+    subgraph DILayer ["⚙️ DI Layer - 依存性注入設定"]
         direction LR
-        NetworkMod[NetworkModule]
-        DatabaseMod[DatabaseModule]
-        RepoMod[RepositoryModule]
+        NetworkModule["NetworkModule|Retrofit/OkHttp設定"]
+        DatabaseModule["DatabaseModule|Room DB設定"]
+        RepositoryModule["RepositoryModule|Repository binding"]
+        UseCaseModule["UseCaseModule|UseCase提供"]
     end
     
-    ViewModel --> Repository
-    Repository --> RepoImpl
+    %% レイヤー間の依存関係
+    UserListVM --> UserRepository
+    UserDetailVM --> UserRepository
+    UserListVM -.optional.-> UseCases
+    UserDetailVM -.optional.-> UseCases
     
-    NetworkMod -.provides.-> API
-    DatabaseMod -.provides.-> DAO
-    RepoMod -.binds.-> RepoImpl
+    UserRepository --> UserRepoImpl
+    
+    %% DI による提供
+    NetworkModule -.provides.-> UserApi
+    DatabaseModule -.provides.-> UserDao
+    DatabaseModule -.provides.-> AppDatabase
+    RepositoryModule -.binds.-> UserRepoImpl
+    UseCaseModule -.provides.-> UseCases
+    
+    %% スタイリング
+    classDef presentationStyle fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef domainStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef dataStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef diStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef interfaceStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class UserListScreen,UserDetailScreen,UserListVM,UserDetailVM,UiStateClasses presentationStyle
+    class Models,User,Address,AppError domainStyle
+    class UserRepoImpl,UserApi,UserDto,UserDao,UserEntity,AppDatabase,DtoMapper,EntityMapper,ApiErrorHandler dataStyle
+    class NetworkModule,DatabaseModule,RepositoryModule,UseCaseModule diStyle
+    class UserRepository,Interfaces interfaceStyle
+    class GetUsersUseCase,RefreshUsersUseCase,UseCases domainStyle
 ```
 
-## 2. 新規画面作成時の標準パターン
+### 📋 各層の詳細説明
+
+#### 🖥️ Presentation Layer (プレゼンテーション層)
+- **責任**: UI表示、ユーザー操作、画面状態管理
+- **Screen (Composable)**: UI描画とユーザーインタラクション
+  - Pull to Refresh、リスト表示、ナビゲーション制御
+- **ViewModel**: ビジネスロジックとUI状態の仲介
+  - StateFlow による状態管理、Domain層との連携
+- **UiState**: 画面状態の定義 (Loading/Success/Error/Empty)
+
+#### 🎯 Domain Layer (ドメイン層)
+- **責任**: ビジネスルール、ドメインモデル、抽象化
+- **Repository Interface**: データアクセスの抽象化
+  - Data層の実装詳細を隠蔽
+- **Domain Models**: ビジネス概念の表現
+  - User, Address, AppError等のピュアなデータクラス
+- **Use Cases (オプション)**: 複雑なビジネスロジック
+  - 複数Repositoryを組み合わせる場合や複雑な処理
+
+#### 💾 Data Layer (データ層)
+- **責任**: データ取得、永続化、データソース管理
+- **Repository Implementation**: Domain層インターフェースの実装
+  - Remote/Local データソースの調整、キャッシュ戦略
+- **Remote Data Source**: API通信
+  - Retrofit, DTOs, エラーハンドリング
+- **Local Data Source**: ローカル永続化
+  - Room DB, Entities, DAO
+- **Data Mappers**: データ変換
+  - DTO ↔ Domain, Entity ↔ Domain
+
+#### ⚙️ DI Layer (依存性注入層)
+- **責任**: 依存関係の設定と提供
+- **各Module**: コンポーネントの生成と提供
+  - Singleton管理、テスト時の差し替え
+
+## Architecture2: 新規画面作成時の標準パターン
 
 ```mermaid
 flowchart TD
@@ -68,41 +172,54 @@ flowchart TD
     B -->|APIのみ| D[軽量パターン]
     B -->|DBのみ| E[ローカルパターン]
     
-    subgraph "📋 標準パターン（推奨）"
-        C --> C1[1. Domain Model作成]
-        C1 --> C2[2. Repository Interface定義]
-        C2 --> C3[3. API + DAO作成]
-        C3 --> C4[4. Repository Implementation]
-        C4 --> C5[5. ViewModel作成]
-        C5 --> C6[6. Screen作成]
-        C6 --> C7[7. DI設定]
-        C7 --> C8[8. Navigation設定]
+    subgraph StandardPattern ["標準パターン 推奨"]
+        C --> C1["Step1: Domain Model作成"]
+        C1 --> C2["Step2: Repository Interface定義"]
+        C2 --> C3["Step3: API + DAO作成"]
+        C3 --> C4["Step4: Repository Implementation"]
+        C4 --> C5["Step5: ViewModel作成"]
+        C5 --> C6["Step6: Screen作成"]
+        C6 --> C7["Step7: DI設定"]
+        C7 --> C8["Step8: Navigation設定"]
     end
     
-    subgraph "🚀 軽量パターン"
-        D --> D1[Domain Model + API]
-        D1 --> D2[Repository Simple]
-        D2 --> D3[ViewModel + Screen]
+    subgraph LightPattern ["軽量パターン"]
+        D --> D1["Domain Model + API"]
+        D1 --> D2["Repository Simple"]
+        D2 --> D3["ViewModel + Screen"]
     end
     
-    subgraph "💾 ローカルパターン"
-        E --> E1[Domain Model + DAO]
-        E1 --> E2[Repository Local]
-        E2 --> E3[ViewModel + Screen]
+    subgraph LocalPattern ["ローカルパターン"]
+        E --> E1["Domain Model + DAO"]
+        E1 --> E2["Repository Local"]
+        E2 --> E3["ViewModel + Screen"]
     end
+    
+    %% スタイリング
+    classDef startStyle fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef decisionStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef standardStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef lightStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef localStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    
+    class A startStyle
+    class B decisionStyle
+    class C,C1,C2,C3,C4,C5,C6,C7,C8 standardStyle
+    class D,D1,D2,D3 lightStyle
+    class E,E1,E2,E3 localStyle
 ```
 
-## 3. データフロー設計原則
+## Architecture3: データフロー設計原則
 
 ```mermaid
 sequenceDiagram
-    participant UI as 📱 UI (Screen)
-    participant VM as 🧠 ViewModel
-    participant Repo as 📦 Repository
-    participant API as 🌐 Remote API
-    participant DB as 💾 Local DB
+    participant UI as UI Screen
+    participant VM as ViewModel
+    participant Repo as Repository
+    participant API as Remote API
+    participant DB as Local DB
     
-    Note over UI,DB: 🔄 標準的なデータフロー
+    Note over UI,DB: 標準的なデータフロー
     
     UI->>VM: User Action
     VM->>Repo: Business Logic Request
@@ -116,13 +233,13 @@ sequenceDiagram
     end
     
     DB-->>Repo: Domain Models
-    Repo-->>VM: Flow<DomainModel>
+    Repo-->>VM: Flow DomainModel
     VM->>VM: Transform to UiState
-    VM-->>UI: StateFlow<UiState>
+    VM-->>UI: StateFlow UiState
     UI->>UI: Recomposition
 ```
 
-## 4. エラーハンドリング統一設計
+## Architecture4: エラーハンドリング統一設計
 
 ```mermaid
 graph TD
@@ -150,99 +267,138 @@ graph TD
     L -->|Retryable| M[AlertDialog with Retry]
     L -->|Non-Retryable| N[AlertDialog with OK]
     L -->|Silent| O[Snackbar/Toast]
+    
+    %% スタイリング
+    classDef exceptionStyle fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    classDef errorTypeStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef errorClassStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef processStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef viewModelStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef uiStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class A exceptionStyle
+    class B,L errorTypeStyle
+    class C,D,E,F,G,H errorClassStyle
+    class I,J processStyle
+    class K viewModelStyle
+    class M,N,O uiStyle
 ```
 
-## 5. DI設計方針（Hilt）
+## Architecture5: DI設計方針（Hilt）
 
 ```mermaid
 graph TB
-    subgraph "🏗️ Module設計原則"
+    subgraph ModuleDesignPrinciples ["Module設計原則"]
         A[機能別Module分割]
         B[Scope適切設定]
         C[Interface活用]
         D[Test可能性確保]
     end
     
-    subgraph "📁 Moduleパターン"
+    subgraph ModulePatterns ["Moduleパターン"]
         direction TB
         
-        subgraph "Core Modules"
-            NetMod[NetworkModule<br/>@Singleton]
-            DBMod[DatabaseModule<br/>@Singleton]
+        subgraph CoreModules ["Core Modules"]
+            NetMod["NetworkModule|Singleton"]
+            DBMod["DatabaseModule|Singleton"]
         end
         
-        subgraph "Feature Modules"
-            UserMod[UserModule<br/>Repository + UseCase]
-            AuthMod[AuthModule<br/>※将来追加想定]
-            SettingMod[SettingsModule<br/>※将来追加想定]
+        subgraph FeatureModules ["Feature Modules"]
+            UserMod["UserModule|Repository + UseCase"]
+            AuthMod["AuthModule|将来追加想定"]
+            SettingMod["SettingsModule|将来追加想定"]
         end
         
-        subgraph "Test Modules"
-            TestNetMod[TestNetworkModule]
-            TestDBMod[TestDatabaseModule]
+        subgraph TestModules ["Test Modules"]
+            TestNetMod["TestNetworkModule"]
+            TestDBMod["TestDatabaseModule"]
         end
     end
     
-    subgraph "🎯 Scope戦略"
-        SingletonScope["@Singleton<br/>DB, API, Repository"]
-        ViewModelScope["@ViewModelScoped<br/>ViewModel"]
-        ActivityScope["@ActivityScoped<br/>Navigation"]
+    subgraph ScopeStrategy ["Scope戦略"]
+        SingletonScope["Singleton|DB, API, Repository"]
+        ViewModelScope["ViewModelScoped|ViewModel"]
+        ActivityScope["ActivityScoped|Navigation"]
     end
+    
+    %% スタイリング
+    classDef principleStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef coreStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef featureStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef testStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef scopeStyle fill:#ffebee,stroke:#c62828,stroke-width:2px
+    
+    class A,B,C,D principleStyle
+    class NetMod,DBMod coreStyle
+    class UserMod,AuthMod,SettingMod featureStyle
+    class TestNetMod,TestDBMod testStyle
+    class SingletonScope,ViewModelScope,ActivityScope scopeStyle
 ```
 
-## 6. UI状態管理パターン
+## Architecture6: UI状態管理パターン
 
 ```mermaid
 graph LR
-    subgraph "🎨 UiState Design Pattern"
+    subgraph UiStateDesignPattern ["UiState Design Pattern"]
         A[UiState Data Class] --> B[Loading State]
         A --> C[Success State]
         A --> D[Error State]
         A --> E[Empty State]
         
-        B --> F[isLoading: Boolean]
-        C --> G[data: List&lt;T&gt;]
-        D --> H[errorMessage: String?<br/>canRetry: Boolean]
-        E --> I[isEmpty: Boolean]
+        B --> F["isLoading: Boolean"]
+        C --> G["data: List T"]
+        D --> H["errorMessage: String?|canRetry: Boolean"]
+        E --> I["isEmpty: Boolean"]
     end
     
-    subgraph "🔄 StateFlow Pattern"
-        J[_uiState: MutableStateFlow] --> K[uiState: StateFlow]
-        K --> L[combine() for complex state]
-        L --> M[UI Observes StateFlow]
+    subgraph StateFlowPattern ["StateFlow Pattern"]
+        J["_uiState: MutableStateFlow"] --> K["uiState: StateFlow"]
+        K --> L["combine for complex state"]
+        L --> M["UI Observes StateFlow"]
     end
     
-    subgraph "⚡ Side Effects"
+    subgraph SideEffects ["Side Effects"]
         N[LaunchedEffect] --> O[One-time events]
         P[DisposableEffect] --> Q[Cleanup actions]
         R[SideEffect] --> S[Non-compose calls]
     end
+    
+    %% スタイリング
+    classDef uiStateStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef stateTypeStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef stateFlowStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef sideEffectStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    
+    class A uiStateStyle
+    class B,C,D,E,F,G,H,I stateTypeStyle
+    class J,K,L,M stateFlowStyle
+    class N,O,P,Q,R,S sideEffectStyle
 ```
 
-## 7. ナビゲーション設計パターン
+## Architecture7: ナビゲーション設計パターン
 
 ```mermaid
 graph TD
-    subgraph "🧭 Navigation Architecture"
+    subgraph NavigationArchitecture ["Navigation Architecture"]
         A[Routes Object] --> B[Type-safe Navigation]
         B --> C[NavHost Configuration]
         C --> D[Screen Transitions]
         
-        subgraph "📱 Screen Types"
-            E[List Screens<br/>- Pull to Refresh<br/>- Search/Filter]
-            F[Detail Screens<br/>- CRUD Operations<br/>- Form Validation]
-            G[Dialog Screens<br/>- Confirmation<br/>- Settings]
+        subgraph ScreenTypes ["Screen Types"]
+            E["List Screens|Pull to Refresh|Search/Filter"]
+            F["Detail Screens|CRUD Operations|Form Validation"]
+            G["Dialog Screens|Confirmation|Settings"]
         end
         
-        subgraph "🎬 Animation Patterns"
-            H[Horizontal Slide<br/>Push/Pop]
-            I[Vertical Slide<br/>Modal/Sheet]
-            J[Fade<br/>Replace/Update]
+        subgraph AnimationPatterns ["Animation Patterns"]
+            H["Horizontal Slide|Push/Pop"]
+            I["Vertical Slide|Modal/Sheet"]
+            J["Fade|Replace/Update"]
         end
     end
 ```
 
-## 8. データベース設計原則
+## Architecture8: データベース設計原則
 
 ```mermaid
 erDiagram
@@ -250,14 +406,14 @@ erDiagram
     
     ENTITIES {
         string naming_convention "snake_case"
-        primary_key id "Always Int/Long"
+        primary_key id "Always Int or Long"
         timestamps created_at "Long timestamp"
         timestamps updated_at "Long timestamp"
         foreign_keys user_id "Reference pattern"
     }
     
     RELATIONSHIPS {
-        string type "OneToMany/ManyToMany"
+        string type "OneToMany or ManyToMany"
         boolean cascade "Delete strategy"
         string indexing "Performance optimization"
     }
@@ -266,44 +422,55 @@ erDiagram
     
     MIGRATION_STRATEGY {
         boolean export_schema "true for production"
-        version_control incremental "Version 1,2,3..."
+        version_control incremental "Version 1 2 3"
         fallback_strategy destructive "Development only"
         test_strategy comprehensive "All scenarios"
     }
 ```
 
-## 9. テスト戦略
+## Architecture9: テスト戦略
 
 ```mermaid
 graph TB
-    subgraph "🧪 Test Architecture"
+    subgraph TestArchitecture ["Test Architecture"]
         
-        subgraph "Unit Tests"
-            A[ViewModel Tests<br/>- StateFlow testing<br/>- Business logic]
-            B[Repository Tests<br/>- Mock API/DB<br/>- Data transformation]
-            C[UseCase Tests<br/>- Business rules<br/>- Error scenarios]
+        subgraph UnitTests ["Unit Tests"]
+            A["ViewModel Tests|StateFlow testing|Business logic"]
+            B["Repository Tests|Mock API/DB|Data transformation"]
+            C["UseCase Tests|Business rules|Error scenarios"]
         end
         
-        subgraph "Integration Tests"
-            D[API Tests<br/>- Network scenarios<br/>- Error responses]
-            E[Database Tests<br/>- Migration testing<br/>- Query validation]
+        subgraph IntegrationTests ["Integration Tests"]
+            D["API Tests|Network scenarios|Error responses"]
+            E["Database Tests|Migration testing|Query validation"]
         end
         
-        subgraph "UI Tests"
-            F[Screen Tests<br/>- User interactions<br/>- Navigation flows]
-            G[Component Tests<br/>- Reusable UI<br/>- State changes]
+        subgraph UITests ["UI Tests"]
+            F["Screen Tests|User interactions|Navigation flows"]
+            G["Component Tests|Reusable UI|State changes"]
         end
     end
     
-    subgraph "🎯 Test Principles"
-        H[Given-When-Then<br/>Pattern]
-        I[Arrange-Act-Assert<br/>Pattern]
-        J[Mock External<br/>Dependencies]
-        K[Test State<br/>Isolation]
+    subgraph TestPrinciples ["Test Principles"]
+        H["Given-When-Then|Pattern"]
+        I["Arrange-Act-Assert|Pattern"]
+        J["Mock External|Dependencies"]
+        K["Test State|Isolation"]
     end
+    
+    %% スタイリング
+    classDef unitTestStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef integrationTestStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef uiTestStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef principleStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    
+    class A,B,C unitTestStyle
+    class D,E integrationTestStyle
+    class F,G uiTestStyle
+    class H,I,J,K principleStyle
 ```
 
-## 10. 機能拡張時のチェックリスト
+## Architecture10: 機能拡張時のチェックリスト
 
 ```mermaid
 flowchart TD
@@ -328,29 +495,44 @@ flowchart TD
     L --> M[Code Review]
     M --> End([機能完成])
     
-    subgraph "⚠️ 注意点"
+    subgraph Considerations ["注意点"]
         N[既存コードへの影響確認]
         O[Performance測定]
         P[Security考慮]
         Q[Accessibility対応]
     end
+    
+    %% スタイリング
+    classDef startEndStyle fill:#ffebee,stroke:#c62828,stroke-width:3px
+    classDef decisionStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef designStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef implementationStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef testStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef considerationStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class Start,End startEndStyle
+    class A decisionStyle
+    class B,C,C1,C2,D designStyle
+    class E,F,G,H,I implementationStyle
+    class J,K,L,M testStyle
+    class N,O,P,Q considerationStyle
 ```
 
-## 📝 開発時の重要原則
+## 開発時の重要原則
 
-### 🎯 設計原則
+### 設計原則
 - **Single Responsibility**: 各クラスは単一の責任を持つ
 - **Dependency Inversion**: 抽象に依存し、具象に依存しない
 - **Testability**: テストしやすい設計を心がける
 - **Consistency**: 既存パターンとの一貫性を保つ
 
-### 🔄 データフロー原則
+### データフロー原則
 - **Unidirectional**: データは一方向に流れる
 - **Immutable State**: 状態は不変オブジェクトで管理
 - **Reactive**: Flow/StateFlowによるリアクティブプログラミング
 - **Error Handling**: 統一されたエラーハンドリング
 
-### 🚀 パフォーマンス原則
+### パフォーマンス原則
 - **Lazy Loading**: 必要な時に必要なデータを読み込む
 - **Caching Strategy**: 適切なキャッシュ戦略
 - **Background Processing**: UI スレッドをブロックしない
