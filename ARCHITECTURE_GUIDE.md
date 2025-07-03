@@ -6,125 +6,133 @@
 
 ```mermaid
 graph TB
+    %% =================================================================
+    %% PRESENTATION LAYER - UI表示とユーザー操作
+    %% =================================================================
     subgraph PresentationLayer ["🖥️ Presentation Layer - UI表示とユーザー操作"]
         direction TB
         
-        subgraph Screens ["画面 (Composable)"]
-            UserListScreen["UserListScreen|一覧表示"]
-            UserDetailScreen["UserDetailScreen|詳細表示"]
+        subgraph Screens ["📱 画面 (Composable)"]
+            Screen["Screen<br/>Jetpack Compose UI<br/>・リスト表示<br/>・フォーム入力<br/>・ナビゲーション"]
         end
         
-        subgraph ViewModels ["ビジネスロジック管理"]
-            UserListVM["UserListViewModel|StateFlow管理"]
-            UserDetailVM["UserDetailViewModel|画面状態制御"]
+        subgraph ViewModels ["🧠 ビジネスロジック管理"]
+            ViewModel["ViewModel<br/>StateFlow + UiState管理<br/>・画面状態制御<br/>・Domain層連携"]
         end
         
-        subgraph UIState ["UI状態定義"]
-            UiStateClasses["UiState Data Classes|Loading/Success/Error"]
+        subgraph UIState ["📊 UI状態定義"]
+            UiStateClasses["UiState<br/>Loading/Success/Error/Empty<br/>・画面表示状態<br/>・エラー情報"]
         end
         
-        UserListScreen --> UserListVM
-        UserDetailScreen --> UserDetailVM
-        UserListVM --> UiStateClasses
-        UserDetailVM --> UiStateClasses
+        Screen --> ViewModel
+        ViewModel --> UiStateClasses
     end
     
+    %% =================================================================
+    %% DOMAIN LAYER - ビジネスルールと抽象化
+    %% =================================================================
     subgraph DomainLayer ["🎯 Domain Layer - ビジネスルールと抽象化"]
         direction TB
         
-        subgraph Interfaces ["インターフェース定義"]
-            UserRepository["UserRepository Interface|データアクセス抽象化"]
+        subgraph Interfaces ["🔌 インターフェース定義"]
+            Repository["Repository Interface<br/>データアクセス抽象化<br/>・CRUD操作定義<br/>・Flow型戻り値"]
         end
         
-        subgraph Models ["ドメインモデル"]
-            User["User Model|ビジネスオブジェクト"]
-            Address["Address Model|値オブジェクト"]
-            AppError["AppError|エラー定義"]
+        subgraph Models ["📋 ドメインモデル"]
+            DomainModel["Domain Models<br/>ビジネスオブジェクト<br/>・エンティティクラス<br/>・ピュアなデータ"]
+            ValueObject["Value Objects<br/>値オブジェクト<br/>・不変オブジェクト<br/>・ビジネスルール"]
+            ErrorModel["Error Models<br/>エラー定義<br/>・型安全なエラー<br/>・エラー分類"]
         end
         
-        subgraph UseCases ["ユースケース (必要に応じて)"]
-            GetUsersUseCase["GetUsersUseCase|ユーザー取得ロジック"]
-            RefreshUsersUseCase["RefreshUsersUseCase|更新ロジック"]
+        subgraph UseCases ["⚙️ ユースケース (オプション)"]
+            UseCase["Use Cases<br/>複雑なビジネスロジック<br/>・複数Repository連携<br/>・トランザクション処理"]
         end
         
-        UserRepository --> Models
-        UseCases --> UserRepository
-        UseCases --> Models
+        Repository --> Models
+        UseCase --> Repository
+        UseCase --> Models
     end
     
+    %% =================================================================
+    %% DATA LAYER - データ取得と永続化
+    %% =================================================================
     subgraph DataLayer ["💾 Data Layer - データ取得と永続化"]
         direction TB
         
-        subgraph Implementation ["Repository実装"]
-            UserRepoImpl["UserRepositoryImpl|データソース調整"]
+        subgraph Implementation ["🏗️ Repository実装"]
+            RepositoryImpl["Repository Implementation<br/>データソース調整<br/>・キャッシュ戦略<br/>・オフライン対応"]
         end
         
-        subgraph RemoteDataSource ["リモートデータソース"]
-            UserApi["UserApi (Retrofit)|REST API呼び出し"]
-            UserDto["UserDto|API レスポンス"]
-            ApiErrorHandler["ApiErrorHandler|エラー変換"]
+        subgraph RemoteDataSource ["🌐 リモートデータソース"]
+            API["API Service (Retrofit)<br/>REST API呼び出し<br/>・HTTP通信<br/>・認証処理"]
+            DTO["DTOs<br/>API レスポンス/リクエスト<br/>・JSON シリアライゼーション<br/>・API仕様準拠"]
+            ErrorHandler["Error Handler<br/>エラー変換<br/>・HTTP エラー<br/>・ネットワークエラー"]
         end
         
-        subgraph LocalDataSource ["ローカルデータソース"]
-            UserDao["UserDao (Room)|DB操作"]
-            UserEntity["UserEntity|DB テーブル"]
-            AppDatabase["AppDatabase|DB設定"]
+        subgraph LocalDataSource ["🗄️ ローカルデータソース"]
+            DAO["DAO (Room)<br/>データベース操作<br/>・CRUD Query<br/>・Flow対応"]
+            Entity["Entities<br/>データベーステーブル<br/>・テーブル定義<br/>・リレーション"]
+            Database["Database (Room)<br/>DB設定とマイグレーション<br/>・スキーマ管理<br/>・バージョン管理"]
         end
         
-        subgraph DataTransformation ["データ変換"]
-            DtoMapper["Dto → Domain Mapper"]
-            EntityMapper["Entity ↔ Domain Mapper"]
+        subgraph DataTransformation ["🔄 データ変換"]
+            Mapper["Data Mappers<br/>DTO/Entity ↔ Domain変換<br/>・型安全な変換<br/>・データ正規化"]
         end
         
-        UserRepoImpl --> UserApi
-        UserRepoImpl --> UserDao
-        UserApi --> UserDto
-        UserDao --> UserEntity
-        UserEntity --> AppDatabase
-        UserDto --> DtoMapper
-        UserEntity --> EntityMapper
-        DtoMapper --> Models
-        EntityMapper --> Models
-        UserApi --> ApiErrorHandler
-        ApiErrorHandler --> AppError
+        RepositoryImpl --> API
+        RepositoryImpl --> DAO
+        API --> DTO
+        DAO --> Entity
+        Entity --> Database
+        DTO --> Mapper
+        Entity --> Mapper
+        Mapper --> Models
+        API --> ErrorHandler
+        ErrorHandler --> ErrorModel
     end
     
+    %% =================================================================
+    %% DI LAYER - 依存性注入設定
+    %% =================================================================
     subgraph DILayer ["⚙️ DI Layer - 依存性注入設定"]
         direction LR
-        NetworkModule["NetworkModule|Retrofit/OkHttp設定"]
-        DatabaseModule["DatabaseModule|Room DB設定"]
-        RepositoryModule["RepositoryModule|Repository binding"]
-        UseCaseModule["UseCaseModule|UseCase提供"]
+        NetworkModule["Network Module<br/>Retrofit/OkHttp設定<br/>・タイムアウト<br/>・インターセプター"]
+        DatabaseModule["Database Module<br/>Room DB設定<br/>・マイグレーション<br/>・DAO提供"]
+        RepositoryModule["Repository Module<br/>Repository binding<br/>・実装バインド<br/>・Singleton管理"]
+        DomainModule["Domain Module<br/>UseCase提供<br/>・ビジネスロジック<br/>・依存関係"]
     end
     
+    %% =================================================================
+    %% 依存関係の定義
+    %% =================================================================
     %% レイヤー間の依存関係
-    UserListVM --> UserRepository
-    UserDetailVM --> UserRepository
-    UserListVM -.optional.-> UseCases
-    UserDetailVM -.optional.-> UseCases
+    ViewModel --> Repository
+    ViewModel -.optional.-> UseCase
     
-    UserRepository --> UserRepoImpl
+    Repository --> RepositoryImpl
     
     %% DI による提供
-    NetworkModule -.provides.-> UserApi
-    DatabaseModule -.provides.-> UserDao
-    DatabaseModule -.provides.-> AppDatabase
-    RepositoryModule -.binds.-> UserRepoImpl
-    UseCaseModule -.provides.-> UseCases
+    NetworkModule -.provides.-> API
+    DatabaseModule -.provides.-> DAO
+    DatabaseModule -.provides.-> Database
+    RepositoryModule -.binds.-> RepositoryImpl
+    DomainModule -.provides.-> UseCase
     
-    %% スタイリング
+    %% =================================================================
+    %% スタイリング定義
+    %% =================================================================
     classDef presentationStyle fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     classDef domainStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef dataStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
     classDef diStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
     classDef interfaceStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     
-    class UserListScreen,UserDetailScreen,UserListVM,UserDetailVM,UiStateClasses presentationStyle
-    class Models,User,Address,AppError domainStyle
-    class UserRepoImpl,UserApi,UserDto,UserDao,UserEntity,AppDatabase,DtoMapper,EntityMapper,ApiErrorHandler dataStyle
-    class NetworkModule,DatabaseModule,RepositoryModule,UseCaseModule diStyle
-    class UserRepository,Interfaces interfaceStyle
-    class GetUsersUseCase,RefreshUsersUseCase,UseCases domainStyle
+    class Screen,ViewModel,UiStateClasses presentationStyle
+    class Models,DomainModel,ValueObject,ErrorModel domainStyle
+    class RepositoryImpl,API,DTO,DAO,Entity,Database,Mapper,ErrorHandler dataStyle
+    class NetworkModule,DatabaseModule,RepositoryModule,DomainModule diStyle
+    class Repository,Interfaces interfaceStyle
+    class UseCase,UseCases domainStyle
 ```
 
 ### 📋 各層の詳細説明
