@@ -1,3 +1,30 @@
 <resources>
     <string name="app_name">Android Base App</string>
+    
+    <!-- Screen titles -->
+    <string name="user_list_title">Users</string>
+    <string name="user_detail_title">User Details</string>
+    
+    <!-- Common messages -->
+    <string name="no_data_message">データがありません</string>
+    <string name="loading_message">読み込み中...</string>
+    
+    <!-- Error messages -->
+    <string name="error_network">ネットワークエラーが発生しました</string>
+    <string name="error_timeout">接続がタイムアウトしました</string>
+    <string name="error_offline">オフラインです</string>
+    <string name="error_unknown">不明なエラーが発生しました</string>
+    
+    <!-- Button labels -->
+    <string name="button_retry">リトライ</string>
+    <string name="button_ok">OK</string>
+    
+    <!-- Content descriptions -->
+    <string name="content_description_back">Back</string>
+    
+    <!-- User detail labels -->
+    <string name="user_detail_label_name">名前</string>
+    <string name="user_detail_label_email">メール</string>
+    <string name="user_detail_label_address">住所</string>
+    <string name="user_detail_label_phone">電話番号</string>
 </resources>

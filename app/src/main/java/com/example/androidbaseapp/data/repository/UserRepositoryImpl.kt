@@ -5,11 +5,15 @@ import com.example.androidbaseapp.data.local.entity.toDomain
 import com.example.androidbaseapp.data.local.entity.toEntity
 import com.example.androidbaseapp.data.remote.api.UserApi
 import com.example.androidbaseapp.data.remote.dto.toDomain
+import com.example.androidbaseapp.domain.model.AppError
 import com.example.androidbaseapp.domain.model.User
 import com.example.androidbaseapp.domain.repository.UserRepository
+import java.io.IOException
+import java.net.SocketTimeoutException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
+import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,8 +24,8 @@ class UserRepositoryImpl @Inject constructor(
 ) : UserRepository {
     
     companion object {
-        private const val CACHE_EXPIRY_HOURS = 24
-        private const val CACHE_EXPIRY_MS = CACHE_EXPIRY_HOURS * 60 * 60 * 1000L
+        private val CACHE_EXPIRY_DURATION = Duration.ofHours(24)
+        private val CACHE_EXPIRY_MS = CACHE_EXPIRY_DURATION.toMillis()
     }
     
     override fun getUsers(): Flow<List<User>> {
@@ -44,7 +48,12 @@ class UserRepositoryImpl @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to refresh users")
-            Result.failure(e)
+            val appError = when (e) {
+                is SocketTimeoutException -> AppError.TimeoutError
+                is IOException -> AppError.NetworkError
+                else -> AppError.UnknownError(e.message ?: "Unknown error occurred")
+            }
+            Result.failure(Exception(appError.getErrorMessage()))
         }
     }
     
@@ -52,7 +61,7 @@ class UserRepositoryImpl @Inject constructor(
         return userDao.getUserById(id)?.toDomain()
     }
     
-    suspend fun isCacheExpired(): Boolean {
+    private suspend fun isCacheExpired(): Boolean {
         val lastUpdated = userDao.getLastUpdatedTime() ?: return true
         val currentTime = System.currentTimeMillis()
         return (currentTime - lastUpdated) > CACHE_EXPIRY_MS

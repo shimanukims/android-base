@@ -26,8 +26,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.androidbaseapp.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.androidbaseapp.domain.model.User
 
@@ -42,7 +44,7 @@ fun UserListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Users") },
+                title = { Text(stringResource(R.string.user_list_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
@@ -68,7 +70,7 @@ fun UserListScreen(
                     }
                     uiState.isEmpty -> {
                         Text(
-                            text = "データがありません",
+                            text = stringResource(R.string.no_data_message),
                             modifier = Modifier.align(Alignment.Center),
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -100,17 +102,16 @@ fun UserListScreen(
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearError) {
-                    Text("OK")
+                    Text(stringResource(R.string.button_ok))
                 }
             },
             dismissButton = {
-                if (errorMessage.contains("network", ignoreCase = true) || 
-                    errorMessage.contains("timeout", ignoreCase = true)) {
+                if (uiState.canRetry) {
                     TextButton(onClick = {
                         viewModel.clearError()
                         viewModel.loadUsers()
                     }) {
-                        Text("リトライ")
+                        Text(stringResource(R.string.button_retry))
                     }
                 }
             }

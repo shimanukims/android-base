@@ -29,7 +29,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.androidbaseapp.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.androidbaseapp.domain.model.User
 
@@ -49,12 +51,12 @@ fun UserDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("User Details") },
+                title = { Text(stringResource(R.string.user_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.content_description_back)
                         )
                     }
                 },
@@ -97,7 +99,7 @@ fun UserDetailScreen(
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearError) {
-                    Text("OK")
+                    Text(stringResource(R.string.button_ok))
                 }
             }
         )
@@ -123,22 +125,22 @@ private fun UserDetailContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 UserDetailItem(
-                    title = "名前",
+                    title = stringResource(R.string.user_detail_label_name),
                     content = user.name
                 )
                 
                 UserDetailItem(
-                    title = "メールアドレス",
+                    title = stringResource(R.string.user_detail_label_email),
                     content = user.email
                 )
                 
                 UserDetailItem(
-                    title = "住所",
+                    title = stringResource(R.string.user_detail_label_address),
                     content = user.address.getFullAddress()
                 )
                 
                 UserDetailItem(
-                    title = "電話番号",
+                    title = stringResource(R.string.user_detail_label_phone),
                     content = user.phone
                 )
             }
