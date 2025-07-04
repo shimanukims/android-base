@@ -14,6 +14,8 @@
     <string name="error_timeout">接続がタイムアウトしました</string>
     <string name="error_offline">オフラインです</string>
     <string name="error_unknown">不明なエラーが発生しました</string>
+    <string name="error_user_fetch_failed">ユーザー取得に失敗しました</string>
+    <string name="error_user_not_found">ユーザーが見つかりません</string>
     
     <!-- Button labels -->
     <string name="button_retry">リトライ</string>

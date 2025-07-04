@@ -3,8 +3,10 @@ package com.example.androidbaseapp.presentation.userlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.androidbaseapp.data.repository.UserRepositoryImpl
+import com.example.androidbaseapp.data.util.AppErrorException
 import com.example.androidbaseapp.domain.model.AppError
 import com.example.androidbaseapp.domain.model.User
+import com.example.androidbaseapp.domain.provider.ErrorMessageProvider
 import com.example.androidbaseapp.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +21,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class UserListViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val errorMessageProvider: ErrorMessageProvider
 ) : ViewModel() {
     
     private val _isLoading = MutableStateFlow(false)
@@ -77,6 +80,7 @@ class UserListViewModel @Inject constructor(
     
     private fun loadUsersInternal(isRefresh: Boolean) {
         viewModelScope.launch {
+            // Loading状態の設定
             if (isRefresh) {
                 _isRefreshing.value = true
             } else {
@@ -84,23 +88,30 @@ class UserListViewModel @Inject constructor(
             }
             _errorMessage.value = null
             
-            try {
-                // Always refresh on app start as per requirements
-                val result = userRepository.refreshUsers()
-                result.onFailure { throwable ->
-                    _errorMessage.value = throwable.message
-                    // エラーメッセージの内容からリトライ可能性を判断
-                    _canRetry.value = throwable.message?.let { msg ->
-                        msg.contains("ネットワークエラー") || msg.contains("タイムアウト")
-                    } ?: false
+            // Result APIを使用したエラーハンドリング（try-catchなし）
+            userRepository.refreshUsers()
+                .onSuccess {
+                    // 成功時は特に処理なし（データはFlowで自動更新）
+                    Timber.d(if (isRefresh) "Users refreshed successfully" else "Users loaded successfully")
+                }
+                .onFailure { throwable ->
+                    // AppErrorExceptionからAppErrorを取得してメッセージを生成
+                    val appError = if (throwable is AppErrorException) {
+                        throwable.appError
+                    } else {
+                        AppError.UnknownError(throwable.message ?: "Unknown error occurred")
+                    }
+                    
+                    _errorMessage.value = errorMessageProvider.getErrorMessage(appError)
+                    _canRetry.value = appError.canRetry()
                     Timber.e(throwable, if (isRefresh) "Failed to refresh users" else "Failed to load users")
                 }
-            } finally {
-                if (isRefresh) {
-                    _isRefreshing.value = false
-                } else {
-                    _isLoading.value = false
-                }
+            
+            // Loading状態の解除
+            if (isRefresh) {
+                _isRefreshing.value = false
+            } else {
+                _isLoading.value = false
             }
         }
     }

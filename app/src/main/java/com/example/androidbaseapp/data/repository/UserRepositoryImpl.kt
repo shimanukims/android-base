@@ -5,6 +5,9 @@ import com.example.androidbaseapp.data.local.entity.toDomain
 import com.example.androidbaseapp.data.local.entity.toEntity
 import com.example.androidbaseapp.data.remote.api.UserApi
 import com.example.androidbaseapp.data.remote.dto.toDomain
+import com.example.androidbaseapp.data.util.safeApiCall
+import com.example.androidbaseapp.data.util.mapWithError
+import com.example.androidbaseapp.data.util.AppErrorException
 import com.example.androidbaseapp.domain.model.AppError
 import com.example.androidbaseapp.domain.model.User
 import com.example.androidbaseapp.domain.repository.UserRepository
@@ -35,30 +38,37 @@ class UserRepositoryImpl @Inject constructor(
     }
     
     override suspend fun refreshUsers(): Result<Unit> {
-        return try {
-            Timber.d("Fetching users from API")
-            val userDtos = userApi.getUsers()
-            val users = userDtos.map { it.toDomain() }
-            val entities = users.map { it.toEntity() }
-            
-            userDao.deleteAllUsers()
-            userDao.insertUsers(entities)
-            
-            Timber.d("Successfully cached ${users.size} users")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to refresh users")
-            val appError = when (e) {
-                is SocketTimeoutException -> AppError.TimeoutError
-                is IOException -> AppError.NetworkError
-                else -> AppError.UnknownError(e.message ?: "Unknown error occurred")
+        Timber.d("Fetching users from API")
+        
+        // Result APIを使用してエラーハンドリング
+        return safeApiCall { userApi.getUsers() }
+            .mapWithError { userDtos ->
+                // APIレスポンスをドメインモデルに変換
+                val users = userDtos.map { it.toDomain() }
+                val entities = users.map { it.toEntity() }
+                
+                // データベースの更新
+                userDao.deleteAllUsers()
+                userDao.insertUsers(entities)
+                
+                Timber.d("Successfully cached ${users.size} users")
+                Unit
             }
-            Result.failure(Exception(appError.getErrorMessage()))
-        }
     }
     
-    override suspend fun getUserById(id: Int): User? {
-        return userDao.getUserById(id)?.toDomain()
+    override suspend fun getUserById(id: Int): Result<User?> {
+        return runCatching {
+            // ローカルDBからユーザーを取得
+            val userEntity = userDao.getUserById(id)
+            userEntity?.toDomain()
+        }.fold(
+            onSuccess = { user -> Result.success(user) },
+            onFailure = { throwable ->
+                Timber.e(throwable, "Failed to get user by id: $id")
+                val appError = AppError.UnknownError("Failed to get user")
+                Result.failure(AppErrorException(appError))
+            }
+        )
     }
     
     private suspend fun isCacheExpired(): Boolean {
