@@ -214,7 +214,983 @@ sequenceDiagram
     UI->>UI: Recomposition
 ```
 
-## Architecture3: エラーハンドリングフロー
+## Architecture3: アプリケーション・UIライフサイクル管理
+
+### 📱 Androidライフサイクルの基本概念
+
+**Androidライフサイクル** は、アプリケーションとUIコンポーネントの生成から破棄までの状態変化を管理する仕組みです。適切なライフサイクル管理により、メモリリークやクラッシュを防止できます。
+
+```mermaid
+flowchart TD
+    subgraph AppLifecycle ["🌐 アプリケーションライフサイクル"]
+        A1["Application.onCreate()<br/>・アプリ起動時に一度だけ実行<br/>・DI初期化<br/>・グローバル設定"]
+        A2["Process Start<br/>・プロセス開始<br/>・メモリ割り当て<br/>・クラスローダー初期化"]
+        A3["Process Kill<br/>・プロセス終了<br/>・メモリ解放<br/>・リソースクリーンアップ"]
+        
+        A2 --> A1
+        A1 --> A3
+    end
+    
+    subgraph ActivityLifecycle ["🏠 Activityライフサイクル"]
+        B1["onCreate()<br/>・初回作成時<br/>・レイアウト設定<br/>・初期化処理"]
+        B2["onStart()<br/>・画面表示開始<br/>・可視状態<br/>・UI準備"]
+        B3["onResume()<br/>・フォーカス取得<br/>・アクティブ状態<br/>・ユーザー操作可能"]
+        B4["onPause()<br/>・フォーカス喪失<br/>・バックグラウンド移行<br/>・処理一時停止"]
+        B5["onStop()<br/>・画面非表示<br/>・不可視状態<br/>・重い処理停止"]
+        B6["onDestroy()<br/>・終了処理<br/>・リソース解放<br/>・メモリクリーンアップ"]
+        
+        B1 --> B2
+        B2 --> B3
+        B3 --> B4
+        B4 --> B5
+        B5 --> B6
+        B4 --> B3
+        B5 --> B2
+    end
+    
+    subgraph ComposeLifecycle ["🎨 Composeライフサイクル"]
+        C1["Composition<br/>・Composable関数実行<br/>・UIツリー構築<br/>・初回描画"]
+        C2["Recomposition<br/>・状態変化による再実行<br/>・UI更新<br/>・最適化された再描画"]
+        C3["Disposal<br/>・Composableの破棄<br/>・リソース解放<br/>・Effectクリーンアップ"]
+        
+        C1 --> C2
+        C2 --> C1
+        C2 --> C3
+    end
+    
+    subgraph ViewModelLifecycle ["🧠 ViewModelライフサイクル"]
+        D1["ViewModel作成<br/>・初回アクセス時<br/>・データ初期化<br/>・Repository接続"]
+        D2["ViewModel使用<br/>・アクティブ状態<br/>・データ提供<br/>・状態管理"]
+        D3["onCleared()<br/>・ViewModelScope自動キャンセル<br/>・リソース解放<br/>・購読停止"]
+        
+        D1 --> D2
+        D2 --> D3
+    end
+    
+    %% 関係性
+    A1 -.->|supports| B1
+    B2 -.->|triggers| C1
+    B3 -.->|activates| D1
+    B4 -.->|may trigger| C3
+    B6 -.->|triggers| D3
+    
+    %% スタイリング
+    classDef appStyle fill:#ff9800,stroke:#e65100,stroke-width:3px,color:#ffffff
+    classDef activityStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
+    classDef composeStyle fill:#4caf50,stroke:#2e7d32,stroke-width:3px,color:#ffffff
+    classDef viewModelStyle fill:#9c27b0,stroke:#6a1b9a,stroke-width:3px,color:#ffffff
+    
+    class A1,A2,A3 appStyle
+    class B1,B2,B3,B4,B5,B6 activityStyle
+    class C1,C2,C3 composeStyle
+    class D1,D2,D3 viewModelStyle
+```
+
+### 📋 ライフサイクル管理実装パターン
+
+#### 1. ViewModelでのライフサイクル考慮
+```kotlin
+class UserListViewModel @Inject constructor(
+    private val repository: UserRepository
+) : ViewModel() {
+    
+    private val _uiState = MutableStateFlow(UserListUiState())
+    val uiState: StateFlow<UserListUiState> = _uiState.asStateFlow()
+    
+    init {
+        // 図の「ViewModel作成」- 初回アクセス時の初期化
+        loadUsers()
+    }
+    
+    fun loadUsers() {
+        // 図の「ViewModel使用」- viewModelScopeで自動管理
+        viewModelScope.launch {
+            repository.getUsers()
+                .collect { users ->
+                    _uiState.update { 
+                        it.copy(users = users, isLoading = false)
+                    }
+                }
+        }
+    }
+    
+    // 図の「onCleared()」- ViewModelScope自動キャンセル
+    override fun onCleared() {
+        super.onCleared()
+        // viewModelScope内のすべてのCoroutineが自動キャンセルされる
+        Timber.d("ViewModel cleared, all coroutines cancelled")
+    }
+}
+```
+
+#### 2. Composeでのライフサイクル管理
+```kotlin
+@Composable
+fun UserListScreen(
+    viewModel: UserListViewModel = hiltViewModel()
+) {
+    // 図の「Composition」- Composable関数実行
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
+    // 一回限りの処理 - ComponentにLifecycle連動
+    LaunchedEffect(Unit) {
+        // 図の「Activityライフサイクル」のonResume相当
+        viewModel.loadUsers()
+    }
+    
+    // ライフサイクルに応じた処理
+    DisposableEffect(Unit) {
+        // リソース取得
+        val listener = SomeListener()
+        
+        onDispose {
+            // 図の「Disposal」- リソース解放
+            listener.cleanup()
+        }
+    }
+    
+    // 状態変化による再描画
+    when {
+        uiState.isLoading -> {
+            // 図の「Recomposition」- 状態変化による再実行
+            LoadingIndicator()
+        }
+        uiState.users.isNotEmpty() -> {
+            UserList(users = uiState.users)
+        }
+        else -> {
+            EmptyMessage()
+        }
+    }
+}
+```
+
+#### 3. Repositoryでのライフサイクル考慮
+```kotlin
+@Singleton
+class UserRepositoryImpl @Inject constructor(
+    private val userApi: UserApi,
+    private val userDao: UserDao,
+    @ApplicationContext private val context: Context
+) : UserRepository {
+    
+    // アプリケーションスコープで管理
+    private val applicationScope = CoroutineScope(
+        Dispatchers.IO + SupervisorJob()
+    )
+    
+    // 図の「Application.onCreate()」後に利用可能
+    override fun getUsers(): Flow<List<User>> = 
+        userDao.getAllUsers()
+            .map { entities -> entities.map { it.toDomain() } }
+            .flowOn(Dispatchers.IO)
+    
+    // バックグラウンド処理
+    override suspend fun refreshUsers(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            // 図の「Process」レベルでの処理
+            val userDtos = userApi.getUsers()
+            val users = userDtos.map { it.toDomain() }
+            val entities = users.map { it.toEntity() }
+            
+            userDao.deleteAllUsers()
+            userDao.insertUsers(entities)
+        }
+    }
+}
+```
+
+#### 4. Application設定例
+```kotlin
+@HiltAndroidApp
+class AndroidBaseApplication : Application() {
+    
+    // 図の「Application.onCreate()」- アプリ起動時に一度だけ実行
+    override fun onCreate() {
+        super.onCreate()
+        initTimber() // 実際の実装に合わせて修正
+    }
+    
+    // 図の「Application.onCreate()」内で呼ばれるログ初期化
+    private fun initTimber() {
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+            Timber.d("Timber initialized for debug build")
+        }
+    }
+}
+```
+
+### 🔧 ライフサイクル管理ガイドライン
+
+1. **適切なScope選択**: 処理の寿命に応じたCoroutineScopeを使用
+2. **collectAsStateWithLifecycle**: UIでのFlow購読時は必須
+3. **LaunchedEffect**: 一回限りの処理に使用
+4. **DisposableEffect**: リソース管理が必要な場合に使用
+5. **メモリリーク防止**: 適切なライフサイクル管理でリークを防止
+
+### ⚠️ よくある問題と対策
+
+#### 問題1: メモリリーク
+```kotlin
+// ❌ 悪い例 - GlobalScopeは避ける
+GlobalScope.launch {
+    // Activityが破棄されても処理が続く
+}
+
+// ✅ 良い例 - 適切なScopeを使用
+viewModelScope.launch {
+    // ViewModelと一緒に自動キャンセル
+}
+```
+
+#### 問題2: UIスレッドブロック
+```kotlin
+// ❌ 悪い例 - runBlockingをUIで使用
+runBlocking {
+    repository.getUsers() // UIスレッドをブロック
+}
+
+// ✅ 良い例 - 非同期で処理
+LaunchedEffect(Unit) {
+    repository.getUsers().collect { users ->
+        // UI更新
+    }
+}
+```
+
+#### 問題3: 不適切なrecomposition
+```kotlin
+// ❌ 現在の実装 - ライフサイクル未考慮（改善推奨）
+val uiState by viewModel.uiState.collectAsState()
+
+// ✅ 推奨実装 - ライフサイクル考慮（将来的な改善）
+val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+```
+
+## Architecture4: Kotlin Coroutines設計ガイドライン
+
+### 🔄 Coroutinesとは？基本概念
+
+**Kotlin Coroutines** は、非同期プログラミングを簡潔かつ安全に記述できる仕組みです。従来のコールバックやRxJavaに代わる、Kotlinの標準的な非同期処理ソリューションです。
+
+#### 🎯 Coroutinesが解決する問題
+
+**従来の非同期処理の問題：**
+```kotlin
+// ❌ コールバック地獄
+getUserFromApi(userId) { user ->
+    getPostsFromApi(user.id) { posts ->
+        getCommentsFromApi(posts[0].id) { comments ->
+            // ネストが深くなり、エラーハンドリングが困難
+            updateUI(user, posts, comments)
+        }
+    }
+}
+
+// ❌ スレッド管理の複雑さ
+Thread {
+    val result = networkCall() // バックグラウンドスレッド
+    runOnUiThread {
+        updateUI(result) // UIスレッドに戻す
+    }
+}.start()
+```
+
+**Coroutinesによる解決：**
+```kotlin
+// ✅ 順次実行のような読みやすいコード
+suspend fun loadUserData(userId: Int) {
+    val user = getUserFromApi(userId)        // 非同期処理だが順次実行のように書ける
+    val posts = getPostsFromApi(user.id)     // 前の処理完了を待つ
+    val comments = getCommentsFromApi(posts[0].id)
+    updateUI(user, posts, comments)          // 自動的にUIスレッドで実行
+}
+```
+
+#### 📚 Coroutinesの基本用語
+
+| 用語 | 説明 | 例 |
+|------|------|-----|
+| **suspend function** | 中断可能な関数。コルーチン内でのみ呼び出し可能 | `suspend fun fetchData()` |
+| **CoroutineScope** | コルーチンの実行範囲。ライフサイクル管理 | `viewModelScope`, `lifecycleScope` |
+| **Dispatcher** | コルーチンが実行されるスレッドを指定 | `Dispatchers.Main`, `Dispatchers.IO` |
+| **Job** | コルーチンの制御ハンドル。キャンセルや完了待機 | `val job = launch { ... }` |
+| **Flow** | 非同期データストリーム。リアクティブプログラミング | `Flow<List<User>>` |
+
+#### ⚡ Coroutinesの主な利点
+
+1. **軽量性**
+   - スレッドより軽量（メモリ使用量が少ない）
+   - 数千のコルーチンを同時実行可能
+   - コンテキストスイッチのオーバーヘッドが小さい
+
+2. **構造化された並行性（Structured Concurrency）**
+   - 親子関係によるライフサイクル管理
+   - 親がキャンセルされると子も自動キャンセル
+   - メモリリークの防止
+
+3. **例外処理の安全性**
+   - 構造化された例外伝播
+   - try-catchで通常の例外処理が可能
+   - SupervisorJobで例外の隔離
+
+4. **読みやすさ**
+   - 順次実行のようなコード
+   - コールバック地獄の解消
+   - 非同期処理の複雑さを隠蔽
+
+#### 🧵 スレッドとの比較
+
+| 比較項目 | Thread | Coroutine |
+|----------|---------|-----------|
+| **作成コスト** | 高い（1MB程度のメモリ） | 低い（数KB） |
+| **同時実行数** | 制限あり（数十〜数百） | 数千〜数万可能 |
+| **コンテキストスイッチ** | OS依存（重い） | 軽量 |
+| **キャンセル** | 複雑（割り込み処理） | 簡単（構造化） |
+| **例外処理** | 複雑 | 通常のtry-catch |
+| **デバッグ** | 困難 | スタックトレースが分かりやすい |
+
+#### 🔀 Dispatchersの役割
+
+**Dispatchers** は、コルーチンがどのスレッドで実行されるかを決定します：
+
+```kotlin
+// メインスレッド（UI更新）
+Dispatchers.Main
+├─ UI更新
+├─ ユーザーインタラクション処理
+└─ 短時間の計算
+
+// IOスレッド（ネットワーク・ファイル）
+Dispatchers.IO
+├─ ネットワーク通信
+├─ ファイル読み書き
+├─ データベースアクセス
+└─ 画像処理
+
+// デフォルトスレッド（CPU集約的処理）
+Dispatchers.Default
+├─ 重い計算処理
+├─ データ変換
+├─ ソート・フィルタリング
+└─ 暗号化処理
+
+// 制限なし（注意して使用）
+Dispatchers.Unconfined
+└─ テスト用途など特殊な場合のみ
+```
+
+#### 🌊 Flowとは？
+
+**Flow** は、時間をかけて複数の値を非同期で送出できるストリームです：
+
+```kotlin
+// 基本的なFlow
+fun getUsers(): Flow<List<User>> = flow {
+    emit(emptyList())           // 最初は空リスト
+    val users = fetchFromApi()  // API呼び出し
+    emit(users)                 // 取得したデータを送出
+}
+
+// Flowの購読
+lifecycleScope.launch {
+    getUsers().collect { users ->
+        updateUI(users) // データが流れてくるたびに実行
+    }
+}
+```
+
+**FlowとStateFlowの違い：**
+- **Flow**: Cold Stream（購読時に実行開始）
+- **StateFlow**: Hot Stream（常に最新値を保持、複数購読者対応）
+
+これらの基本概念を理解した上で、以下の詳細な実装パターンを確認してください。
+
+```mermaid
+flowchart TD
+    subgraph CoroutineBasics ["🔄 Coroutine基本要素"]
+        A["CoroutineScope<br/>・コルーチンの実行範囲<br/>・自動キャンセル管理<br/>・構造化された並行性"]
+        B["Dispatcher<br/>・実行スレッドの指定<br/>・Main/IO/Default/Unconfined<br/>・パフォーマンス最適化"]
+        C["suspend function<br/>・中断可能関数<br/>・ノンブロッキング実行<br/>・コルーチン内でのみ呼び出し可能"]
+        D["Job<br/>・コルーチンの制御<br/>・キャンセル・完了待機<br/>・親子関係管理"]
+    end
+    
+    subgraph CoroutineFlow ["🌊 データフロー（Flow）"]
+        E["Flow Builder<br/>・flow { emit() }<br/>・flowOf()<br/>・asFlow()"]
+        F["Flow Operators<br/>・map/filter/combine<br/>・collectLatest<br/>・stateIn/shareIn"]
+        G["StateFlow<br/>・状態保持<br/>・最新値を記憶<br/>・UI状態管理に最適"]
+        H["SharedFlow<br/>・イベント配信<br/>・複数購読者対応<br/>・Hot Stream"]
+    end
+    
+    subgraph CoroutineLifecycle ["⏰ ライフサイクル連携"]
+        I["viewModelScope<br/>・ViewModelに紐づく<br/>・自動キャンセル<br/>・UI関連処理"]
+        J["lifecycleScope<br/>・Activityに紐づく<br/>・ライフサイクル連動<br/>・UI更新処理"]
+        K["collectAsStateWithLifecycle<br/>・ライフサイクル考慮<br/>・自動購読停止<br/>・メモリリーク防止"]
+    end
+    
+    subgraph ErrorHandling ["⚠️ エラーハンドリング"]
+        L["Result API<br/>・onSuccess/onFailure<br/>・型安全なエラー処理<br/>・関数型アプローチ"]
+        M["runCatching<br/>・Result型を返す<br/>・例外を安全にキャッチ<br/>・safeApiCall内で使用"]
+        N["SupervisorJob<br/>・子の失敗を隔離<br/>・部分的な失敗許容<br/>・堅牢性向上"]
+    end
+    
+    %% 関係性の説明
+    %% 基本要素の関係
+    A -.->|"provides"| C
+    B -.->|"runs on"| C
+    C -.->|"creates"| E
+    
+    %% Flowの連鎖
+    E -->|"transforms to"| F
+    F -->|"converts to"| G
+    F -->|"converts to"| H
+    
+    %% ライフサイクルの統合
+    A -.->|"creates"| I
+    A -.->|"creates"| J
+    G -->|"observes with"| K
+    
+    %% エラーハンドリングの統合
+    C -.->|"uses"| L
+    L -->|"implemented by"| M
+    A -.->|"can use"| N
+    
+    %% スタイリング
+    classDef basicsStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
+    classDef flowStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
+    classDef lifecycleStyle fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#ffffff
+    classDef errorStyle fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#ffffff
+    
+    class A,B,C,D basicsStyle
+    class E,F,G,H flowStyle
+    class I,J,K lifecycleStyle
+    class L,M,N errorStyle
+```
+
+### 📋 Coroutines実装パターン
+
+#### 1. ViewModelでのCoroutine使用例
+```kotlin
+@HiltViewModel
+class UserListViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val errorMessageProvider: ErrorMessageProvider
+) : ViewModel() {
+    
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    
+    // 図の「StateFlow」- 状態保持と最新値を記憶
+    val users: StateFlow<List<User>> = userRepository.getUsers()
+        .stateIn(
+            scope = viewModelScope, // 図の「viewModelScope」- ViewModelに紐づく自動キャンセル
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    
+    // 図の「Flow Operators」- combine で複数のStateFlowを結合
+    val uiState: StateFlow<UserListUiState> = combine(
+        users, isLoading, isRefreshing, errorMessage, canRetry
+    ) { users, loading, refreshing, error, retry ->
+        UserListUiState(
+            users = users,
+            isLoading = loading,
+            isRefreshing = refreshing,
+            errorMessage = error,
+            canRetry = retry,
+            isEmpty = users.isEmpty() && !loading && !refreshing
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = UserListUiState()
+    )
+    
+    init {
+        // 図の「ViewModel作成」- 初回アクセス時の初期化
+        loadUsers()
+    }
+    
+    // 図の「runCatching」の代わりにResult APIを使用
+    private fun loadUsersInternal(isRefresh: Boolean) {
+        viewModelScope.launch { // 図の「viewModelScope」- ViewModelに紐づく自動キャンセル
+            if (isRefresh) {
+                _isRefreshing.value = true
+            } else {
+                _isLoading.value = true
+            }
+            
+            // 図の「suspend function」- 中断可能関数の呼び出し（Result API使用）
+            userRepository.refreshUsers()
+                .onSuccess {
+                    // 成功時は特に処理なし（データはFlowで自動更新）
+                    Timber.d("Users loaded successfully")
+                }
+                .onFailure { throwable ->
+                    // 図の「Result API」でのエラー処理
+                    val appError = if (throwable is AppErrorException) {
+                        throwable.appError
+                    } else {
+                        AppError.UnknownError(throwable.message ?: "Unknown error")
+                    }
+                    
+                    _errorMessage.value = errorMessageProvider.getErrorMessage(appError)
+                    _canRetry.value = appError.canRetry()
+                }
+            
+            // Loading状態の解除
+            if (isRefresh) {
+                _isRefreshing.value = false
+            } else {
+                _isLoading.value = false
+            }
+        }
+    }
+}
+```
+
+#### 2. Repositoryでの非同期処理例
+```kotlin
+@Singleton
+class UserRepositoryImpl @Inject constructor(
+    private val userApi: UserApi,
+    private val userDao: UserDao
+) : UserRepository {
+    
+    // 図の「Flow Builder」- DAOのFlowを直接利用（自動的に最新データを配信）
+    override fun getUsers(): Flow<List<User>> {
+        return userDao.getAllUsers().map { entities ->
+            entities.map { it.toDomain() } // 図の「Flow Operators」- map で変換
+        }
+    }
+    
+    // 図の「suspend function」- 中断可能関数
+    override suspend fun refreshUsers(): Result<Unit> {
+        Timber.d("Fetching users from API")
+        
+        // 図の「runCatching」の代わりにsafeApiCallを使用（Result API）
+        return safeApiCall { userApi.getUsers() } // 図の「Dispatcher」- 内部でDispatchers.IO使用
+            .mapWithError { userDtos -> // 図の「Flow Operators」- mapWithError で変換とエラー処理
+                // APIレスポンスをドメインモデルに変換
+                val users = userDtos.map { it.toDomain() }
+                val entities = users.map { it.toEntity() }
+                
+                // データベースの更新
+                userDao.deleteAllUsers()
+                userDao.insertUsers(entities)
+                
+                Timber.d("Successfully cached ${users.size} users")
+                Unit
+            }
+    }
+    
+    // 図の「suspend function」- 追加のユーティリティメソッド
+    override suspend fun getUserById(id: Int): Result<User?> {
+        return runCatching {
+            // ローカルDBからユーザーを取得
+            val userEntity = userDao.getUserById(id)
+            userEntity?.toDomain()
+        }.fold(
+            onSuccess = { user -> Result.success(user) },
+            onFailure = { throwable ->
+                Timber.e(throwable, "Failed to get user by id: $id")
+                val appError = AppError.UnknownError("Failed to get user")
+                Result.failure(AppErrorException(appError))
+            }
+        )
+    }
+}
+```
+
+#### 3. UI（Compose）でのCoroutine使用例
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UserListScreen(
+    onNavigateToDetail: (Int) -> Unit,
+    viewModel: UserListViewModel = hiltViewModel()
+) {
+    // 注意: 実際の実装では collectAsState を使用
+    // 理想的には collectAsStateWithLifecycle を使用すべき
+    val uiState by viewModel.uiState.collectAsState()
+    
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.user_list_title)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
+    ) { paddingValues ->
+        // 図の「Composition」- Composable関数実行
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = viewModel::refresh, // 図の「viewModelScope」経由でCoroutine起動
+            modifier = Modifier.fillMaxSize()
+        ) {
+            when {
+                uiState.isLoading && uiState.users.isEmpty() -> {
+                    // 図の「Recomposition」- 状態変化による再実行
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+                uiState.isEmpty -> {
+                    Text(
+                        text = stringResource(R.string.no_data_message),
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+                else -> {
+                    LazyColumn {
+                        items(uiState.users) { user ->
+                            UserItem(
+                                user = user,
+                                onClick = { onNavigateToDetail(user.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // エラーダイアログ表示
+    uiState.errorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearError() },
+            title = { Text(stringResource(R.string.error_title)) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearError() }) {
+                    Text(stringResource(R.string.ok))
+                }
+            }
+        )
+    }
+}
+```
+
+### 🔧 Coroutines設計ガイドライン
+
+1. **適切なScope使用**: ViewModelScopeやLifecycleScopeを活用
+2. **Dispatcher指定**: 処理内容に応じた適切なDispatcher選択
+3. **構造化された並行性**: 親子関係を活用した自動キャンセル
+4. **Flow活用**: リアクティブなデータ管理にFlowを使用
+5. **エラーハンドリング**: Result APIとrunCatchingで安全性確保
+
+## Architecture5: DI設計方針（Hilt）
+
+### 🔌 依存性注入の基本概念
+
+**DI（Dependency Injection）** は、クラスが必要とする依存関係を外部から注入する設計パターンです。以下の利点があります：
+
+- **テスタビリティ**: Mock実装を簡単に差し替え可能
+- **疎結合**: 具体的な実装に依存しない
+- **再利用性**: 同じインターフェースで複数の実装を使い分け
+- **保守性**: 設定を一箇所で管理
+
+```mermaid
+flowchart LR
+    subgraph WithoutDI ["❌ DI使用前（問題あり）"]
+        VM1["ViewModel"] -->|直接生成| Repo1["Repository実装"]
+        Repo1 -->|直接生成| API1["API実装"]
+        Repo1 -->|直接生成| DB1["DB実装"]
+        
+        Note1["問題点:<br/>・テスト困難<br/>・実装の差し替え不可<br/>・依存関係が密結合"]
+    end
+    
+    subgraph WithDI ["✅ DI使用後（Hilt）"]
+        VM2["ViewModel"] -->|注入される| RepoInterface["Repository<br/>インターフェース"]
+        
+        Hilt["Hilt<br/>（DIコンテナ）"] -->|実装を提供| RepoInterface
+        
+        RepoImpl["Repository実装"] -.->|実装| RepoInterface
+        RepoImpl -->|注入される| APIInterface["API"]
+        RepoImpl -->|注入される| DBInterface["DB"]
+        
+        Note2["利点:<br/>・テスト時はMock注入<br/>・実装の差し替え可能<br/>・疎結合"]
+    end
+    
+    %% スタイリング
+    classDef problemStyle fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#ffffff
+    classDef solutionStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
+    classDef interfaceStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
+    classDef hiltStyle fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#ffffff
+    
+    class VM1,Repo1,API1,DB1,Note1 problemStyle
+    class VM2,RepoImpl,Note2 solutionStyle
+    class RepoInterface,APIInterface,DBInterface interfaceStyle
+    class Hilt hiltStyle
+```
+
+### 🎯 DI（依存性注入）とは？
+
+**クラスが必要とする部品を外部から渡す仕組み**です。
+
+#### 例：ViewModelがRepositoryを使う場合
+
+**❌ DI使用前（問題あり）**
+```kotlin
+class UserListViewModel {
+    // 図の「❌ DI使用前」 - ViewModelが直接Repositoryを生成
+    private val repository = UserRepositoryImpl(
+        UserApi(),      // 直接生成（図の問題点：密結合）
+        UserDao()       // 直接生成（図の問題点：テスト困難）
+    )
+}
+```
+
+**✅ DI使用後（Hilt）**
+```kotlin
+@HiltViewModel
+class UserListViewModel @Inject constructor(
+    // 図の「✅ DI使用後」 - インターフェースを注入される
+    private val repository: UserRepository  // インターフェースを注入
+) : ViewModel()
+
+// 図の「Hilt（DIコンテナ）」が実装を管理
+@Module
+abstract class RepositoryModule {
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(
+        impl: UserRepositoryImpl  // 図の「Repository実装」
+    ): UserRepository  // 図の「Repository インターフェース」
+}
+```
+
+### 🔧 Hiltを使った実装構成
+
+```mermaid
+flowchart TD
+    subgraph HiltModules ["Hiltモジュール構成"]
+        NetworkModule["NetworkModule<br/>・Retrofit提供<br/>・API設定"]
+        DatabaseModule["DatabaseModule<br/>・Room DB提供<br/>・DAO提供"]
+        RepositoryModule["RepositoryModule<br/>・Repository実装を<br/>インターフェースに結合"]
+        ProviderModule["ProviderModule<br/>・ErrorMessageProvider<br/>などの提供"]
+    end
+    
+    subgraph Usage ["使用例"]
+        NetworkModule -->|API提供| RepositoryImpl["Repository実装"]
+        DatabaseModule -->|DAO提供| RepositoryImpl
+        RepositoryModule -->|Repository提供| ViewModel
+        ProviderModule -->|Provider提供| ViewModel
+    end
+    
+    %% スタイリング
+    classDef moduleStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
+    classDef usageStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
+    
+    class NetworkModule,DatabaseModule,RepositoryModule,ProviderModule moduleStyle
+    class RepositoryImpl,ViewModel usageStyle
+```
+
+### 📋 重要なポイント
+
+1. **依存関係は自動管理**: `@Inject`を付けるだけで必要な部品が注入される
+2. **テストが簡単**: テスト時はMock実装に差し替え可能
+3. **設定は一箇所**: Module内で依存関係を一元管理
+4. **実装の詳細を隠蔽**: インターフェースを使って疎結合を実現
+
+## Architecture6: UI状態管理パターン
+
+### 🎯 状態管理の基本原則
+
+**UI状態管理** は、アプリケーションの画面状態を予測可能で一貫性のある方法で管理する仕組みです。以下の原則に従います：
+
+- **Single Source of Truth**: 単一の真実の情報源
+- **Unidirectional Data Flow**: 単方向データフロー
+- **Immutable State**: 不変の状態オブジェクト
+- **Reactive Programming**: リアクティブな状態変更
+
+### 🌊 StateFlowとは？
+
+**StateFlow** は、UI状態を管理するためのKotlin Coroutinesの仕組みです。Androidアプリケーションの状態管理において中心的な役割を果たします。
+
+#### 📚 StateFlowの基本概念
+
+| 特徴 | 説明 | 例 |
+|------|------|-----|
+| **状態保持** | 常に最新の値を保持する | `StateFlow<UserListUiState>` |
+| **Hot Stream** | 購読者がいなくても値を保持 | アプリバックグラウンド時も状態維持 |
+| **型安全** | コンパイル時に型チェック | `StateFlow<List<User>>` |
+| **ライフサイクル対応** | 自動的な購読開始/停止 | `collectAsStateWithLifecycle()` |
+
+#### 🔄 StateFlowの基本パターン
+
+StateFlowには以下の基本的な実装パターンがあります：
+
+1. **Private MutableStateFlow + Public StateFlow**: 内部でのみ変更可能、外部は読み取り専用
+2. **combineによる複数StateFlow結合**: 複数の状態を1つにまとめる
+3. **stateInによるFlow→StateFlow変換**: FlowをStateFlowに変換して状態管理
+
+詳細な実装例は後述の「StateFlow Pattern 実装例」を参照してください。
+
+#### 🆚 StateFlow vs LiveData
+
+| 比較項目 | StateFlow | LiveData |
+|----------|-----------|----------|
+| **プラットフォーム** | Kotlin Multiplatform対応 | Android専用 |
+| **Coroutines統合** | ネイティブ対応 | 変換が必要 |
+| **初期値** | 必須 | nullable |
+| **学習コスト** | Coroutines知識必要 | Android特化で簡単 |
+| **パフォーマンス** | 高効率 | 十分 |
+
+### ⚡ Side Effectsとは？
+
+**Side Effects** は、UIの描画（Composition）以外の処理を安全に実行するためのCompose APIです。適切なSide Effectの選択により、メモリリークや不要な処理を防げます。
+
+#### 🎯 Side Effectsの種類と用途
+
+| Side Effect | 用途 | 実行タイミング | 例 |
+|-------------|------|---------------|-----|
+| **LaunchedEffect** | 一回限りの処理 | keyが変更された時 | API呼び出し、Navigation |
+| **DisposableEffect** | リソース管理 | 開始時と終了時 | リスナー登録/解除 |
+| **SideEffect** | Compose外への呼び出し | 毎回のRecomposition | Analytics送信 |
+| **rememberCoroutineScope** | 手動Coroutine起動 | イベントハンドラー内 | ボタンクリック処理 |
+
+#### 📋 Side Effects基本パターン
+
+各Side Effectの基本的な用途は以下の通りです：
+
+- **LaunchedEffect**: keyが変更された時の一回限りの処理（API呼び出し、Navigationなど）
+- **DisposableEffect**: リソースの取得と解放が必要な処理（リスナー登録/解除など）
+- **SideEffect**: 毎回のRecompositionで実行される処理（Analytics送信など）
+- **rememberCoroutineScope**: イベントハンドラー内でのCoroutine実行
+
+具体的な実装例は後述の「Side Effects 実装例」を参照してください。
+
+#### ⚠️ Side Effects使用時の注意点
+
+1. **適切なkey指定**: LaunchedEffectはkeyが変更された時のみ実行
+2. **リソース解放**: DisposableEffectでは必ずonDisposeでクリーンアップ
+3. **SideEffectの濫用禁止**: 毎回実行されるため、重い処理は避ける
+4. **無限ループ防止**: SideEffect内でStateを変更しない
+
+```mermaid
+flowchart TD
+    StateManagementPrinciples["📐 状態管理原則<br/><br/><b>UI状態管理の3つの基本ルール</b><br/><br/>1. 単一の真実の情報源<br/>　　- ViewModel内で状態管理<br/>　　- 重複状態の回避<br/><br/>2. 単方向データフロー<br/>　　- ViewModel → UI<br/>　　- UI → ViewModel (Actions)<br/><br/>3. 不変状態<br/>　　- StateFlow + data class<br/>　　- 状態変更は新しいオブジェクト<br/><br/><i>なぜ必要か：複数の場所で状態を管理すると<br/>データの不整合やバグが発生しやすくなる</i>"]
+    
+    UiStateDesignPattern["🏗️ UiState Design Pattern<br/><br/><b>画面が取りうる4つの状態を統一的に表現</b><br/><br/>UiState Data Class<br/>├─ Loading State (isLoading: Boolean)<br/>├─ Success State (data: List&lt;T&gt;)<br/>├─ Error State (errorMessage: String?, canRetry: Boolean)<br/>└─ Empty State (isEmpty: Boolean)"]
+    
+    StateFlowPattern["🔄 StateFlow Pattern<br/><br/><b>ViewModelとUIの間で状態を安全に共有</b><br/><br/>実装フロー：<br/>1. _uiState: MutableStateFlow (Private)<br/>2. uiState: StateFlow (Public読み取り専用)<br/>3. combine for complex state (複数StateFlowの結合)<br/>4. UI Observes StateFlow (collectAsStateでObserve)"]
+    
+    SideEffects["⚡ Side Effects<br/><br/><b>UI描画以外の処理を適切に管理</b><br/><br/>LaunchedEffect → One-time events<br/>　　API呼び出し、Navigation<br/><br/>DisposableEffect → Cleanup actions<br/>　　リソース解放、リスナー削除<br/><br/>SideEffect → Non-compose calls<br/>　　Analytics、Logging"]
+    
+    %% スタイリング - VSCode対応
+    classDef principleStyle fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#ffffff
+    classDef uiStateStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
+    classDef stateFlowStyle fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#ffffff
+    classDef sideEffectStyle fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#ffffff
+    
+    class StateManagementPrinciples principleStyle
+    class UiStateDesignPattern uiStateStyle
+    class StateFlowPattern stateFlowStyle
+    class SideEffects sideEffectStyle
+```
+
+### 📊 実装例の詳細
+
+#### 図2: UiState Design Pattern 実装例
+```kotlin
+// 図2で示した4つの状態をViewModelで使用
+when {
+    uiState.isLoading -> ShowLoadingIndicator()        // Loading State対応
+    uiState.errorMessage != null -> ShowError(uiState.errorMessage)  // Error State対応
+    uiState.isEmpty -> ShowEmptyMessage()              // Empty State対応
+    else -> ShowUserList(uiState.users)                // Success State対応
+}
+```
+
+#### 図3: StateFlow Pattern 実装例
+```kotlin
+// 図3の実装フローに対応
+class UserListViewModel : ViewModel() {
+    // 1. _uiState: MutableStateFlow (Private) - 図3-1対応
+    private val _uiState = MutableStateFlow(UserListUiState())
+    private val _isLoading = MutableStateFlow(false)
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    
+    // 2. uiState: StateFlow (Public読み取り専用) - 図3-2対応
+    // 3. combine for complex state (複数StateFlowの結合) - 図3-3対応
+    val uiState: StateFlow<UserListUiState> = combine(
+        _uiState,
+        _isLoading,
+        _errorMessage
+    ) { state, loading, error ->
+        state.copy(
+            isLoading = loading,
+            errorMessage = error
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = UserListUiState()
+    )
+    
+    // 状態の更新
+    fun loadUsers() {
+        _isLoading.value = true
+        // データ取得処理...
+    }
+}
+
+// 4. UI Observes StateFlow (collectAsStateでObserve) - 図3-4対応
+@Composable
+fun UserListScreen(viewModel: UserListViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // uiStateの変更に応じて自動的に再描画
+}
+```
+
+#### 図4: Side Effects 実装例
+```kotlin
+// LaunchedEffect → One-time events (図4対応)
+@Composable
+fun UserScreen(userId: String) {
+    LaunchedEffect(userId) {
+        // API呼び出し例：ユーザーIDが変わった時だけ再実行
+        viewModel.loadUser(userId)
+    }
+}
+
+// DisposableEffect → Cleanup actions (図4対応)
+@Composable
+fun LocationScreen() {
+    DisposableEffect(Unit) {
+        val listener = startLocationUpdates()  // リソース取得
+        onDispose {
+            stopLocationUpdates(listener)      // リソース解放
+        }
+    }
+}
+
+// SideEffect → Non-compose calls (図4対応)
+@Composable
+fun AnalyticsScreen(screenName: String) {
+    SideEffect {
+        // Analytics例：画面が表示される度に記録
+        analytics.logScreenView(screenName)
+    }
+}
+```
+
+### 🔧 状態管理ガイドライン
+
+1. **UiState設計**: 画面の全状態を1つのdata classで表現
+2. **StateFlow活用**: リアクティブな状態変更をStateFlowで管理
+3. **Side Effect分離**: 副作用は適切なCompose Effectで処理
+4. **状態の最小化**: 必要最小限の状態のみを保持
+
+## Architecture7: エラーハンドリングフロー
 
 ### 📊 エラー処理の階層構造とデータフロー
 
@@ -341,247 +1317,7 @@ flowchart TB
 - **DI**: 依存関係の逆転でPlatform固有実装を注入
 - **利点**: Domain層がAndroid固有に依存せず、テストも容易、メッセージの一元管理
 
-## Architecture4: DI設計方針（Hilt）
-
-### 🔌 依存性注入の基本概念
-
-**DI（Dependency Injection）** は、クラスが必要とする依存関係を外部から注入する設計パターンです。以下の利点があります：
-
-- **テスタビリティ**: Mock実装を簡単に差し替え可能
-- **疎結合**: 具体的な実装に依存しない
-- **再利用性**: 同じインターフェースで複数の実装を使い分け
-- **保守性**: 設定を一箇所で管理
-
-```mermaid
-flowchart LR
-    subgraph WithoutDI ["❌ DI使用前（問題あり）"]
-        VM1["ViewModel"] -->|直接生成| Repo1["Repository実装"]
-        Repo1 -->|直接生成| API1["API実装"]
-        Repo1 -->|直接生成| DB1["DB実装"]
-        
-        Note1["問題点:<br/>・テスト困難<br/>・実装の差し替え不可<br/>・依存関係が密結合"]
-    end
-    
-    subgraph WithDI ["✅ DI使用後（Hilt）"]
-        VM2["ViewModel"] -->|注入される| RepoInterface["Repository<br/>インターフェース"]
-        
-        Hilt["Hilt<br/>（DIコンテナ）"] -->|実装を提供| RepoInterface
-        
-        RepoImpl["Repository実装"] -.->|実装| RepoInterface
-        RepoImpl -->|注入される| APIInterface["API"]
-        RepoImpl -->|注入される| DBInterface["DB"]
-        
-        Note2["利点:<br/>・テスト時はMock注入<br/>・実装の差し替え可能<br/>・疎結合"]
-    end
-    
-    %% スタイリング
-    classDef problemStyle fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#ffffff
-    classDef solutionStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
-    classDef interfaceStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
-    classDef hiltStyle fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#ffffff
-    
-    class VM1,Repo1,API1,DB1,Note1 problemStyle
-    class VM2,RepoImpl,Note2 solutionStyle
-    class RepoInterface,APIInterface,DBInterface interfaceStyle
-    class Hilt hiltStyle
-```
-
-### 🎯 DI（依存性注入）とは？
-
-**クラスが必要とする部品を外部から渡す仕組み**です。
-
-#### 例：ViewModelがRepositoryを使う場合
-
-**❌ DI使用前（問題あり）**
-```kotlin
-class UserListViewModel {
-    // 図の「❌ DI使用前」 - ViewModelが直接Repositoryを生成
-    private val repository = UserRepositoryImpl(
-        UserApi(),      // 直接生成（図の問題点：密結合）
-        UserDao()       // 直接生成（図の問題点：テスト困難）
-    )
-}
-```
-
-**✅ DI使用後（Hilt）**
-```kotlin
-@HiltViewModel
-class UserListViewModel @Inject constructor(
-    // 図の「✅ DI使用後」 - インターフェースを注入される
-    private val repository: UserRepository  // インターフェースを注入
-) : ViewModel()
-
-// 図の「Hilt（DIコンテナ）」が実装を管理
-@Module
-abstract class RepositoryModule {
-    @Binds
-    @Singleton
-    abstract fun bindUserRepository(
-        impl: UserRepositoryImpl  // 図の「Repository実装」
-    ): UserRepository  // 図の「Repository インターフェース」
-}
-```
-
-### 🔧 Hiltを使った実装構成
-
-```mermaid
-flowchart TD
-    subgraph HiltModules ["Hiltモジュール構成"]
-        NetworkModule["NetworkModule<br/>・Retrofit提供<br/>・API設定"]
-        DatabaseModule["DatabaseModule<br/>・Room DB提供<br/>・DAO提供"]
-        RepositoryModule["RepositoryModule<br/>・Repository実装を<br/>インターフェースに結合"]
-        ProviderModule["ProviderModule<br/>・ErrorMessageProvider<br/>などの提供"]
-    end
-    
-    subgraph Usage ["使用例"]
-        NetworkModule -->|API提供| RepositoryImpl["Repository実装"]
-        DatabaseModule -->|DAO提供| RepositoryImpl
-        RepositoryModule -->|Repository提供| ViewModel
-        ProviderModule -->|Provider提供| ViewModel
-    end
-    
-    %% スタイリング
-    classDef moduleStyle fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#ffffff
-    classDef usageStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
-    
-    class NetworkModule,DatabaseModule,RepositoryModule,ProviderModule moduleStyle
-    class RepositoryImpl,ViewModel usageStyle
-```
-
-### 📋 重要なポイント
-
-1. **依存関係は自動管理**: `@Inject`を付けるだけで必要な部品が注入される
-2. **テストが簡単**: テスト時はMock実装に差し替え可能
-3. **設定は一箇所**: Module内で依存関係を一元管理
-4. **実装の詳細を隠蔽**: インターフェースを使って疎結合を実現
-
-## Architecture5: UI状態管理パターン
-
-### 🎯 状態管理の基本原則
-
-**UI状態管理** は、アプリケーションの画面状態を予測可能で一貫性のある方法で管理する仕組みです。以下の原則に従います：
-
-- **Single Source of Truth**: 単一の真実の情報源
-- **Unidirectional Data Flow**: 単方向データフロー
-- **Immutable State**: 不変の状態オブジェクト
-- **Reactive Programming**: リアクティブな状態変更
-
-```mermaid
-flowchart TD
-    StateManagementPrinciples["📐 状態管理原則<br/><br/><b>UI状態管理の3つの基本ルール</b><br/><br/>1. 単一の真実の情報源<br/>　　- ViewModel内で状態管理<br/>　　- 重複状態の回避<br/><br/>2. 単方向データフロー<br/>　　- ViewModel → UI<br/>　　- UI → ViewModel (Actions)<br/><br/>3. 不変状態<br/>　　- StateFlow + data class<br/>　　- 状態変更は新しいオブジェクト<br/><br/><i>なぜ必要か：複数の場所で状態を管理すると<br/>データの不整合やバグが発生しやすくなる</i>"]
-    
-    UiStateDesignPattern["🏗️ UiState Design Pattern<br/><br/><b>画面が取りうる4つの状態を統一的に表現</b><br/><br/>UiState Data Class<br/>├─ Loading State (isLoading: Boolean)<br/>├─ Success State (data: List&lt;T&gt;)<br/>├─ Error State (errorMessage: String?, canRetry: Boolean)<br/>└─ Empty State (isEmpty: Boolean)"]
-    
-    StateFlowPattern["🔄 StateFlow Pattern<br/><br/><b>ViewModelとUIの間で状態を安全に共有</b><br/><br/>実装フロー：<br/>1. _uiState: MutableStateFlow (Private)<br/>2. uiState: StateFlow (Public読み取り専用)<br/>3. combine for complex state (複数StateFlowの結合)<br/>4. UI Observes StateFlow (collectAsStateでObserve)"]
-    
-    SideEffects["⚡ Side Effects<br/><br/><b>UI描画以外の処理を適切に管理</b><br/><br/>LaunchedEffect → One-time events<br/>　　API呼び出し、Navigation<br/><br/>DisposableEffect → Cleanup actions<br/>　　リソース解放、リスナー削除<br/><br/>SideEffect → Non-compose calls<br/>　　Analytics、Logging"]
-    
-    %% スタイリング - VSCode対応
-    classDef principleStyle fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#ffffff
-    classDef uiStateStyle fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#ffffff
-    classDef stateFlowStyle fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#ffffff
-    classDef sideEffectStyle fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#ffffff
-    
-    class StateManagementPrinciples principleStyle
-    class UiStateDesignPattern uiStateStyle
-    class StateFlowPattern stateFlowStyle
-    class SideEffects sideEffectStyle
-```
-
-### 📊 実装例の詳細
-
-#### 図2: UiState Design Pattern 実装例
-```kotlin
-// 図2で示した4つの状態をViewModelで使用
-when {
-    uiState.isLoading -> ShowLoadingIndicator()        // Loading State対応
-    uiState.errorMessage != null -> ShowError(uiState.errorMessage)  // Error State対応
-    uiState.isEmpty -> ShowEmptyMessage()              // Empty State対応
-    else -> ShowUserList(uiState.users)                // Success State対応
-}
-```
-
-#### 図3: StateFlow Pattern 実装例
-```kotlin
-// 図3の実装フローに対応
-class UserListViewModel : ViewModel() {
-    // 1. _uiState: MutableStateFlow (Private) - 図3-1対応
-    private val _uiState = MutableStateFlow(UserListUiState())
-    private val _isLoading = MutableStateFlow(false)
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    
-    // 2. uiState: StateFlow (Public読み取り専用) - 図3-2対応
-    // 3. combine for complex state (複数StateFlowの結合) - 図3-3対応
-    val uiState: StateFlow<UserListUiState> = combine(
-        _uiState,
-        _isLoading,
-        _errorMessage
-    ) { state, loading, error ->
-        state.copy(
-            isLoading = loading,
-            errorMessage = error
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = UserListUiState()
-    )
-    
-    // 状態の更新
-    fun loadUsers() {
-        _isLoading.value = true
-        // データ取得処理...
-    }
-}
-
-// 4. UI Observes StateFlow (collectAsStateでObserve) - 図3-4対応
-@Composable
-fun UserListScreen(viewModel: UserListViewModel) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // uiStateの変更に応じて自動的に再描画
-}
-```
-
-#### 図4: Side Effects 実装例
-```kotlin
-// LaunchedEffect → One-time events (図4対応)
-@Composable
-fun UserScreen(userId: String) {
-    LaunchedEffect(userId) {
-        // API呼び出し例：ユーザーIDが変わった時だけ再実行
-        viewModel.loadUser(userId)
-    }
-}
-
-// DisposableEffect → Cleanup actions (図4対応)
-@Composable
-fun LocationScreen() {
-    DisposableEffect(Unit) {
-        val listener = startLocationUpdates()  // リソース取得
-        onDispose {
-            stopLocationUpdates(listener)      // リソース解放
-        }
-    }
-}
-
-// SideEffect → Non-compose calls (図4対応)
-@Composable
-fun AnalyticsScreen(screenName: String) {
-    SideEffect {
-        // Analytics例：画面が表示される度に記録
-        analytics.logScreenView(screenName)
-    }
-}
-```
-
-### 🔧 状態管理ガイドライン
-
-1. **UiState設計**: 画面の全状態を1つのdata classで表現
-2. **StateFlow活用**: リアクティブな状態変更をStateFlowで管理
-3. **Side Effect分離**: 副作用は適切なCompose Effectで処理
-4. **状態の最小化**: 必要最小限の状態のみを保持
-
-## Architecture6: Unit Test Guidelines
+## Architecture8: Unit Test Guidelines
 
 ### 🧪 単体テスト設計ガイドライン
 
