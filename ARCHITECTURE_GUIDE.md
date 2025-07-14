@@ -2,6 +2,39 @@
 
 > 新規参画者向け基本構成説明および機能拡張時の設計方針
 
+## 目次
+
+1. [Architecture1: 全体アーキテクチャ（Clean Architecture + MVVM）](#architecture1-全体アーキテクチャclean-architecture--mvvm)
+   - [各層の詳細説明](#layers-detail)
+2. [Architecture2: データフロー設計原則](#architecture2-データフロー設計原則)
+3. [Architecture3: アプリケーション・UIライフサイクル管理](#architecture3)
+   - [Androidライフサイクルの基本概念](#android-lifecycle)
+   - [ライフサイクル管理実装パターン](#lifecycle-patterns)
+   - [ライフサイクル管理ガイドライン](#lifecycle-guidelines)
+   - [よくある問題と対策](#common-problems)
+4. [Architecture4: Kotlin Coroutines設計ガイドライン](#architecture4-kotlin-coroutines設計ガイドライン)
+   - [Coroutinesとは？基本概念](#coroutines-basics)
+   - [Coroutines実装パターン](#coroutines-patterns)
+   - [Coroutines設計ガイドライン](#coroutines-guidelines)
+5. [Architecture5: DI設計方針（Hilt）](#architecture5-di設計方針hilt)
+   - [依存性注入の基本概念](#di-basics)
+   - [DI（依存性注入）とは？](#what-is-di)
+   - [Hiltを使った実装構成](#hilt-implementation)
+   - [重要なポイント](#di-key-points)
+6. [Architecture6: UI状態管理パターン](#architecture6-ui状態管理パターン)
+   - [状態管理の基本原則](#state-principles)
+   - [StateFlowとは？](#what-is-stateflow)
+   - [Side Effectsとは？](#side-effects)
+   - [実装例の詳細](#implementation-examples)
+   - [状態管理ガイドライン](#state-guidelines)
+7. [Architecture7: エラーハンドリングフロー](#architecture7-エラーハンドリングフロー)
+   - [エラー処理の階層構造とデータフロー](#error-hierarchy)
+   - [エラー処理の詳細説明](#error-details)
+   - [ErrorMessageProviderパターン](#error-provider)
+8. [Architecture8: Unit Test Guidelines](#architecture8-unit-test-guidelines)
+   - [単体テスト設計ガイドライン](#test-design)
+   - [Unit Test実装ガイドライン](#test-implementation)
+
 ## Architecture1: 全体アーキテクチャ（Clean Architecture + MVVM）
 
 ```mermaid
@@ -133,7 +166,7 @@ graph TB
     class UseCase,UseCases domainStyle
 ```
 
-### 📋 各層の詳細説明
+### 📋 各層の詳細説明 {#layers-detail}
 
 #### 🖥️ Presentation Layer (プレゼンテーション層)
 - **責任**: 
@@ -214,9 +247,9 @@ sequenceDiagram
     UI->>UI: Recomposition
 ```
 
-## Architecture3: アプリケーション・UIライフサイクル管理
+## Architecture3: アプリケーション・UIライフサイクル管理 {#architecture3}
 
-### 📱 Androidライフサイクルの基本概念
+### 📱 Androidライフサイクルの基本概念 {#android-lifecycle}
 
 **Androidライフサイクル** は、アプリケーションとUIコンポーネントの生成から破棄までの状態変化を管理する仕組みです。適切なライフサイクル管理により、メモリリークやクラッシュを防止できます。
 
@@ -286,7 +319,7 @@ flowchart TD
     class D1,D2,D3 viewModelStyle
 ```
 
-### 📋 ライフサイクル管理実装パターン
+### 📋 ライフサイクル管理実装パターン {#lifecycle-patterns}
 
 #### 1. ViewModelでのライフサイクル考慮
 ```kotlin
@@ -421,7 +454,7 @@ class AndroidBaseApplication : Application() {
 }
 ```
 
-### 🔧 ライフサイクル管理ガイドライン
+### 🔧 ライフサイクル管理ガイドライン {#lifecycle-guidelines}
 
 1. **適切なScope選択**: 処理の寿命に応じたCoroutineScopeを使用
 2. **collectAsStateWithLifecycle**: UIでのFlow購読時は必須
@@ -429,7 +462,7 @@ class AndroidBaseApplication : Application() {
 4. **DisposableEffect**: リソース管理が必要な場合に使用
 5. **メモリリーク防止**: 適切なライフサイクル管理でリークを防止
 
-### ⚠️ よくある問題と対策
+### ⚠️ よくある問題と対策 {#common-problems}
 
 #### 問題1: メモリリーク
 ```kotlin
@@ -470,7 +503,7 @@ val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
 ## Architecture4: Kotlin Coroutines設計ガイドライン
 
-### 🔄 Coroutinesとは？基本概念
+### 🔄 Coroutinesとは？基本概念 {#coroutines-basics}
 
 **Kotlin Coroutines** は、非同期プログラミングを簡潔かつ安全に記述できる仕組みです。従来のコールバックやRxJavaに代わる、Kotlinの標準的な非同期処理ソリューションです。
 
@@ -668,7 +701,7 @@ flowchart TD
     class L,M,N errorStyle
 ```
 
-### 📋 Coroutines実装パターン
+### 📋 Coroutines実装パターン {#coroutines-patterns}
 
 #### 1. ViewModelでのCoroutine使用例
 ```kotlin
@@ -878,7 +911,7 @@ fun UserListScreen(
 }
 ```
 
-### 🔧 Coroutines設計ガイドライン
+### 🔧 Coroutines設計ガイドライン {#coroutines-guidelines}
 
 1. **適切なScope使用**: ViewModelScopeやLifecycleScopeを活用
 2. **Dispatcher指定**: 処理内容に応じた適切なDispatcher選択
@@ -888,7 +921,7 @@ fun UserListScreen(
 
 ## Architecture5: DI設計方針（Hilt）
 
-### 🔌 依存性注入の基本概念
+### 🔌 依存性注入の基本概念 {#di-basics}
 
 **DI（Dependency Injection）** は、クラスが必要とする依存関係を外部から注入する設計パターンです。以下の利点があります：
 
@@ -931,7 +964,7 @@ flowchart LR
     class Hilt hiltStyle
 ```
 
-### 🎯 DI（依存性注入）とは？
+### 🎯 DI（依存性注入）とは？ {#what-is-di}
 
 **クラスが必要とする部品を外部から渡す仕組み**です。
 
@@ -967,7 +1000,7 @@ abstract class RepositoryModule {
 }
 ```
 
-### 🔧 Hiltを使った実装構成
+### 🔧 Hiltを使った実装構成 {#hilt-implementation}
 
 ```mermaid
 flowchart TD
@@ -993,7 +1026,7 @@ flowchart TD
     class RepositoryImpl,ViewModel usageStyle
 ```
 
-### 📋 重要なポイント
+### 📋 重要なポイント {#di-key-points}
 
 1. **依存関係は自動管理**: `@Inject`を付けるだけで必要な部品が注入される
 2. **テストが簡単**: テスト時はMock実装に差し替え可能
@@ -1002,7 +1035,7 @@ flowchart TD
 
 ## Architecture6: UI状態管理パターン
 
-### 🎯 状態管理の基本原則
+### 🎯 状態管理の基本原則 {#state-principles}
 
 **UI状態管理** は、アプリケーションの画面状態を予測可能で一貫性のある方法で管理する仕組みです。以下の原則に従います：
 
@@ -1011,7 +1044,7 @@ flowchart TD
 - **Immutable State**: 不変の状態オブジェクト
 - **Reactive Programming**: リアクティブな状態変更
 
-### 🌊 StateFlowとは？
+### 🌊 StateFlowとは？ {#what-is-stateflow}
 
 **StateFlow** は、UI状態を管理するためのKotlin Coroutinesの仕組みです。Androidアプリケーションの状態管理において中心的な役割を果たします。
 
@@ -1044,7 +1077,7 @@ StateFlowには以下の基本的な実装パターンがあります：
 | **学習コスト** | Coroutines知識必要 | Android特化で簡単 |
 | **パフォーマンス** | 高効率 | 十分 |
 
-### ⚡ Side Effectsとは？
+### ⚡ Side Effectsとは？ {#side-effects}
 
 **Side Effects** は、UIの描画（Composition）以外の処理を安全に実行するためのCompose APIです。適切なSide Effectの選択により、メモリリークや不要な処理を防げます。
 
@@ -1097,7 +1130,7 @@ flowchart TD
     class SideEffects sideEffectStyle
 ```
 
-### 📊 実装例の詳細
+### 📊 実装例の詳細 {#implementation-examples}
 
 #### 図2: UiState Design Pattern 実装例
 ```kotlin
@@ -1183,7 +1216,7 @@ fun AnalyticsScreen(screenName: String) {
 }
 ```
 
-### 🔧 状態管理ガイドライン
+### 🔧 状態管理ガイドライン {#state-guidelines}
 
 1. **UiState設計**: 画面の全状態を1つのdata classで表現
 2. **StateFlow活用**: リアクティブな状態変更をStateFlowで管理
@@ -1192,7 +1225,7 @@ fun AnalyticsScreen(screenName: String) {
 
 ## Architecture7: エラーハンドリングフロー
 
-### 📊 エラー処理の階層構造とデータフロー
+### 📊 エラー処理の階層構造とデータフロー {#error-hierarchy}
 
 ```mermaid
 flowchart TB
@@ -1251,7 +1284,7 @@ flowchart TB
     class ErrorDialog uiStyle
 ```
 
-### 🔍 エラー処理の詳細説明
+### 🔍 エラー処理の詳細説明 {#error-details}
 
 1. **Data層（発生源）**: 
    - 各種データソースで例外が発生
@@ -1308,7 +1341,7 @@ flowchart TB
    - エラー種別に応じた適切なUI表示
    - ユーザーアクション（リトライ等）の処理
 
-### 📋 ErrorMessageProviderパターン
+### 📋 ErrorMessageProviderパターン {#error-provider}
 
 **Clean Architectureに準拠したエラーメッセージ管理**:
 
@@ -1319,7 +1352,7 @@ flowchart TB
 
 ## Architecture8: Unit Test Guidelines
 
-### 🧪 単体テスト設計ガイドライン
+### 🧪 単体テスト設計ガイドライン {#test-design}
 
 ```mermaid
 flowchart LR
@@ -1369,7 +1402,7 @@ flowchart LR
     class K,L,M toolStyle
 ```
 
-### 📋 Unit Test実装ガイドライン
+### 📋 Unit Test実装ガイドライン {#test-implementation}
 
 #### 1. ViewModel テスト - StateFlow状態変化のテスト
 ```kotlin
@@ -1530,19 +1563,19 @@ fun `refreshUsers should return success Result when API call succeeds`() = runTe
 
 ## 開発時の重要原則
 
-### 設計原則
+### 設計原則 {#design-principles}
 - **Single Responsibility**: 各クラスは単一の責任を持つ
 - **Dependency Inversion**: 抽象に依存し、具象に依存しない
 - **Testability**: テストしやすい設計を心がける
 - **Consistency**: 既存パターンとの一貫性を保つ
 
-### データフロー原則
+### データフロー原則 {#dataflow-principles}
 - **Unidirectional**: データは一方向に流れる
 - **Immutable State**: 状態は不変オブジェクトで管理
 - **Reactive**: Flow/StateFlowによるリアクティブプログラミング
 - **Error Handling**: 統一されたエラーハンドリング
 
-### パフォーマンス原則
+### パフォーマンス原則 {#performance-principles}
 - **Lazy Loading**: 必要な時に必要なデータを読み込む
 - **Caching Strategy**: 適切なキャッシュ戦略
 - **Background Processing**: UI スレッドをブロックしない
